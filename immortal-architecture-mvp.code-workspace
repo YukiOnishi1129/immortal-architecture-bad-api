@@ -11,6 +11,10 @@
 		{
 			"path": "./frontend/",
 			"name": "💻 FRONTEND"
+		},
+		{
+			"path": "./backend/",
+			"name": "🛠️ BACKEND"
 		}
 	]
 }
