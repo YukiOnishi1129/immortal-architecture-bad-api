@@ -1,1 +1,1 @@
-# immortal-architecture-mvp
+# immortal-architecture-bad-api
