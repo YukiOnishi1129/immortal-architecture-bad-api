@@ -3,16 +3,20 @@ GOLANGCI_LINT ?= $(GOBIN)/golangci-lint
 GOCACHE ?= $(CURDIR)/.gocache
 GOMODCACHE ?= $(CURDIR)/.gomodcache
 MIGRATE ?= $(GOBIN)/migrate
+SQLC ?= sqlc
 MIGRATIONS_DIR ?= $(CURDIR)/migrations
 ENV_FILE ?= $(CURDIR)/.env
 
-.PHONY: lint tidy migrate-create migrate-up migrate-down migrate-force
+.PHONY: lint tidy migrate-create migrate-up migrate-down migrate-force sqlc
 
 lint:
 	@GOCACHE=$(GOCACHE) GOMODCACHE=$(GOMODCACHE) $(GOLANGCI_LINT) run ./...
 
 tidy:
 	@GOCACHE=$(GOCACHE) GOMODCACHE=$(GOMODCACHE) go mod tidy
+
+sqlc:
+	@$(SQLC) generate
 
 migrate-create:
 	@if [ -z "$(name)" ]; then echo "Usage: make migrate-create name=add_notes_table"; exit 1; fi
