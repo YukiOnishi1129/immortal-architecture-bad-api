@@ -1,3 +1,4 @@
+// Package service bundles business logic for the API.
 package service
 
 import (
@@ -6,11 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"immortal-architecture-bad-api/backend/internal/db/sqlc"
+	sqldb "immortal-architecture-bad-api/backend/internal/db/sqlc"
 )
 
 var (
@@ -78,23 +78,6 @@ func (s *AccountService) GetAccountByID(ctx context.Context, id string) (*sqldb.
 	}
 
 	return account, nil
-}
-
-func parseUUID(value string) (pgtype.UUID, error) {
-	var result pgtype.UUID
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return result, ErrInvalidAccountID
-	}
-
-	u, err := uuid.Parse(value)
-	if err != nil {
-		return result, err
-	}
-
-	copy(result.Bytes[:], u[:])
-	result.Valid = true
-	return result, nil
 }
 
 func splitName(full string) (string, string) {

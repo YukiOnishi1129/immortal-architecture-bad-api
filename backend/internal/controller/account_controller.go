@@ -1,6 +1,8 @@
+// Package controller exposes HTTP handlers for Echo.
 package controller
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -9,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/labstack/echo/v4"
 
-	"immortal-architecture-bad-api/backend/internal/db/sqlc"
+	sqldb "immortal-architecture-bad-api/backend/internal/db/sqlc"
 	"immortal-architecture-bad-api/backend/internal/service"
 )
 
@@ -88,14 +90,13 @@ func (h *AccountController) getAccountByID(c echo.Context) error {
 
 	account, err := h.service.GetAccountByID(c.Request().Context(), accountID)
 	if err != nil {
-		switch err {
-		case service.ErrAccountNotFound:
+		if errors.Is(err, service.ErrAccountNotFound) {
 			return respondError(c, http.StatusNotFound, "account not found")
-		case service.ErrInvalidAccountID:
-			return respondError(c, http.StatusBadRequest, "invalid account id")
-		default:
-			return respondError(c, http.StatusInternalServerError, "failed to fetch account")
 		}
+		if errors.Is(err, service.ErrInvalidAccountID) {
+			return respondError(c, http.StatusBadRequest, "invalid account id")
+		}
+		return respondError(c, http.StatusInternalServerError, "failed to fetch account")
 	}
 
 	return c.JSON(http.StatusOK, newAccountResponse(account))
@@ -113,10 +114,10 @@ func (h *AccountController) getCurrentAccount(c echo.Context) error {
 
 	account, err := h.service.GetAccountByID(c.Request().Context(), accountID)
 	if err != nil {
-		if err == service.ErrAccountNotFound {
+		if errors.Is(err, service.ErrAccountNotFound) {
 			return respondError(c, http.StatusNotFound, "account not found")
 		}
-		if err == service.ErrInvalidAccountID {
+		if errors.Is(err, service.ErrInvalidAccountID) {
 			return respondError(c, http.StatusBadRequest, "invalid account id")
 		}
 		return respondError(c, http.StatusInternalServerError, "failed to fetch account")

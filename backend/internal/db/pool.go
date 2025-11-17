@@ -1,3 +1,4 @@
+// Package db provides helpers for database connections.
 package db
 
 import (

@@ -16,7 +16,7 @@ import (
 
 	"immortal-architecture-bad-api/backend/internal/controller"
 	dbpkg "immortal-architecture-bad-api/backend/internal/db"
-	"immortal-architecture-bad-api/backend/internal/db/sqlc"
+	sqldb "immortal-architecture-bad-api/backend/internal/db/sqlc"
 	"immortal-architecture-bad-api/backend/internal/service"
 )
 
@@ -37,6 +37,8 @@ func main() {
 
 	queries := sqldb.New(pool)
 	accountService := service.NewAccountService(queries)
+	templateService := service.NewTemplateService(queries)
+	noteService := service.NewNoteService(queries)
 
 	e := echo.New()
 	e.HideBanner = true
@@ -50,6 +52,12 @@ func main() {
 	apiGroup := e.Group("/api")
 	accountController := controller.NewAccountController(accountService)
 	accountController.Register(apiGroup.Group("/accounts"))
+
+	templateController := controller.NewTemplateController(templateService)
+	templateController.Register(apiGroup.Group("/templates"))
+
+	noteController := controller.NewNoteController(noteService)
+	noteController.Register(apiGroup.Group("/notes"))
 
 	port := os.Getenv("API_PORT")
 	if port == "" {

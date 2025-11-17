@@ -18,6 +18,11 @@ tidy:
 sqlc:
 	@$(SQLC) generate
 
+.PHONY: build
+
+build:
+	@GOCACHE=$(GOCACHE) GOMODCACHE=$(GOMODCACHE) go build ./...
+
 migrate-create:
 	@if [ -z "$(name)" ]; then echo "Usage: make migrate-create name=add_notes_table"; exit 1; fi
 	@$(MIGRATE) create -seq -ext sql -dir $(MIGRATIONS_DIR) $(name)
