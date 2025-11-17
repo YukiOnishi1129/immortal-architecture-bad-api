@@ -1,3 +1,4 @@
+// Package main provides the entrypoint for the anti-pattern Echo API.
 package main
 
 import (
@@ -5,9 +6,9 @@ import (
 	"net/http"
 	"os"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func main() {
@@ -20,7 +21,7 @@ func main() {
 		return c.String(http.StatusOK, "ok")
 	})
 
-	port := os.Getenv("PORT")
+	port := os.Getenv("API_PORT")
 	if port == "" {
 		port = "8080"
 	}
