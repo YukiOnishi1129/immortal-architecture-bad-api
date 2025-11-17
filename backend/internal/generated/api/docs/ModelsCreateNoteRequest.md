@@ -6,13 +6,14 @@ Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **Title** | **string** | タイトル | 
 **TemplateId** | **string** | テンプレートID | 
+**OwnerId** | **string** | 所有者ID | 
 **Sections** | Pointer to [**[]ModelsCreateSectionRequest**](ModelsCreateSectionRequest.md) | セクション（オプション） | [optional] 
 
 ## Methods
 
 ### NewModelsCreateNoteRequest
 
-`func NewModelsCreateNoteRequest(title string, templateId string, ) *ModelsCreateNoteRequest`
+`func NewModelsCreateNoteRequest(title string, templateId string, ownerId string, ) *ModelsCreateNoteRequest`
 
 NewModelsCreateNoteRequest instantiates a new ModelsCreateNoteRequest object
 This constructor will assign default values to properties that have it defined,
@@ -65,6 +66,26 @@ and a boolean to check if the value has been set.
 `func (o *ModelsCreateNoteRequest) SetTemplateId(v string)`
 
 SetTemplateId sets TemplateId field to given value.
+
+
+### GetOwnerId
+
+`func (o *ModelsCreateNoteRequest) GetOwnerId() string`
+
+GetOwnerId returns the OwnerId field if non-nil, zero value otherwise.
+
+### GetOwnerIdOk
+
+`func (o *ModelsCreateNoteRequest) GetOwnerIdOk() (*string, bool)`
+
+GetOwnerIdOk returns a tuple with the OwnerId field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetOwnerId
+
+`func (o *ModelsCreateNoteRequest) SetOwnerId(v string)`
+
+SetOwnerId sets OwnerId field to given value.
 
 
 ### GetSections

@@ -5,7 +5,6 @@ import {
   TemplateResponseSchema,
   UpdateTemplateRequestSchema,
 } from "../../dto/template.dto";
-import { templateRepository } from "../../repository/template.repository";
 import { templateService } from "../../service/template/template.service";
 
 export async function createTemplateCommand(request: unknown) {
@@ -14,40 +13,12 @@ export async function createTemplateCommand(request: unknown) {
   // Validate request
   const validated = CreateTemplateRequestSchema.parse(request);
 
-  // Create template
   const template = await templateService.createTemplate(
     session.account.id,
     validated,
   );
 
-  // Get owner information
-  const owner = await templateService.getAccountForTemplate(template.ownerId);
-  if (!owner) {
-    throw new Error("Owner not found");
-  }
-
-  // Convert domain entity to response DTO
-  const response = {
-    id: template.id,
-    name: template.name,
-    ownerId: template.ownerId,
-    owner: {
-      id: owner.id,
-      firstName: owner.firstName,
-      lastName: owner.lastName,
-      thumbnail: owner.thumbnail,
-    },
-    fields: template.fields.map((field) => ({
-      id: field.id,
-      label: field.label,
-      order: field.order,
-      isRequired: field.isRequired,
-    })),
-    updatedAt: template.updatedAt.toISOString(),
-    isUsed: false,
-  };
-
-  return TemplateResponseSchema.parse(response);
+  return TemplateResponseSchema.parse(template);
 }
 
 export async function updateTemplateCommand(id: string, request: unknown) {
@@ -63,39 +34,7 @@ export async function updateTemplateCommand(id: string, request: unknown) {
       session.account.id,
       validated,
     );
-
-    // Get owner information and isUsed status
-    const [owner, isUsed] = await Promise.all([
-      templateService.getAccountForTemplate(template.ownerId),
-      templateRepository.isUsedByNotes(template.id),
-    ]);
-
-    if (!owner) {
-      throw new Error("Owner not found");
-    }
-
-    // Convert domain entity to response DTO
-    const response = {
-      id: template.id,
-      name: template.name,
-      ownerId: template.ownerId,
-      owner: {
-        id: owner.id,
-        firstName: owner.firstName,
-        lastName: owner.lastName,
-        thumbnail: owner.thumbnail,
-      },
-      fields: template.fields.map((field) => ({
-        id: field.id,
-        label: field.label,
-        order: field.order,
-        isRequired: field.isRequired,
-      })),
-      updatedAt: template.updatedAt.toISOString(),
-      isUsed,
-    };
-
-    return TemplateResponseSchema.parse(response);
+    return TemplateResponseSchema.parse(template);
   } catch (error) {
     if (error instanceof Error) {
       if (error.message === "TEMPLATE_FIELD_IN_USE") {
@@ -114,9 +53,9 @@ export async function updateTemplateCommand(id: string, request: unknown) {
 }
 
 export async function deleteTemplateCommand(id: string) {
-  const session = await getAuthenticatedSessionServer();
+  await getAuthenticatedSessionServer();
 
   // Delete template
-  await templateService.deleteTemplate(id, session.account.id);
+  await templateService.deleteTemplate(id);
   return { success: true };
 }

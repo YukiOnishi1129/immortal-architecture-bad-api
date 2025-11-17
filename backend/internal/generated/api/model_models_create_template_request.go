@@ -23,6 +23,8 @@ var _ MappedNullable = &ModelsCreateTemplateRequest{}
 type ModelsCreateTemplateRequest struct {
 	// テンプレート名
 	Name string `json:"name"`
+	// 所有者ID
+	OwnerId string `json:"ownerId"`
 	// フィールド一覧
 	Fields []ModelsCreateFieldRequest `json:"fields"`
 }
@@ -33,9 +35,10 @@ type _ModelsCreateTemplateRequest ModelsCreateTemplateRequest
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewModelsCreateTemplateRequest(name string, fields []ModelsCreateFieldRequest) *ModelsCreateTemplateRequest {
+func NewModelsCreateTemplateRequest(name string, ownerId string, fields []ModelsCreateFieldRequest) *ModelsCreateTemplateRequest {
 	this := ModelsCreateTemplateRequest{}
 	this.Name = name
+	this.OwnerId = ownerId
 	this.Fields = fields
 	return &this
 }
@@ -70,6 +73,30 @@ func (o *ModelsCreateTemplateRequest) GetNameOk() (*string, bool) {
 // SetName sets field value
 func (o *ModelsCreateTemplateRequest) SetName(v string) {
 	o.Name = v
+}
+
+// GetOwnerId returns the OwnerId field value
+func (o *ModelsCreateTemplateRequest) GetOwnerId() string {
+	if o == nil {
+		var ret string
+		return ret
+	}
+
+	return o.OwnerId
+}
+
+// GetOwnerIdOk returns a tuple with the OwnerId field value
+// and a boolean to check if the value has been set.
+func (o *ModelsCreateTemplateRequest) GetOwnerIdOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.OwnerId, true
+}
+
+// SetOwnerId sets field value
+func (o *ModelsCreateTemplateRequest) SetOwnerId(v string) {
+	o.OwnerId = v
 }
 
 // GetFields returns the Fields field value
@@ -107,6 +134,7 @@ func (o ModelsCreateTemplateRequest) MarshalJSON() ([]byte, error) {
 func (o ModelsCreateTemplateRequest) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["name"] = o.Name
+	toSerialize["ownerId"] = o.OwnerId
 	toSerialize["fields"] = o.Fields
 	return toSerialize, nil
 }
@@ -117,6 +145,7 @@ func (o *ModelsCreateTemplateRequest) UnmarshalJSON(data []byte) (err error) {
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
 		"name",
+		"ownerId",
 		"fields",
 	}
 

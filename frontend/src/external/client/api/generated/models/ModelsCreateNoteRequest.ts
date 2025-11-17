@@ -40,6 +40,12 @@ export interface ModelsCreateNoteRequest {
      */
     templateId: string;
     /**
+     * 所有者ID
+     * @type {string}
+     * @memberof ModelsCreateNoteRequest
+     */
+    ownerId: string;
+    /**
      * セクション（オプション）
      * @type {Array<ModelsCreateSectionRequest>}
      * @memberof ModelsCreateNoteRequest
@@ -53,6 +59,7 @@ export interface ModelsCreateNoteRequest {
 export function instanceOfModelsCreateNoteRequest(value: object): value is ModelsCreateNoteRequest {
     if (!('title' in value) || value['title'] === undefined) return false;
     if (!('templateId' in value) || value['templateId'] === undefined) return false;
+    if (!('ownerId' in value) || value['ownerId'] === undefined) return false;
     return true;
 }
 
@@ -68,6 +75,7 @@ export function ModelsCreateNoteRequestFromJSONTyped(json: any, ignoreDiscrimina
         
         'title': json['title'],
         'templateId': json['templateId'],
+        'ownerId': json['ownerId'],
         'sections': json['sections'] == null ? undefined : ((json['sections'] as Array<any>).map(ModelsCreateSectionRequestFromJSON)),
     };
 }
@@ -85,6 +93,7 @@ export function ModelsCreateNoteRequestToJSONTyped(value?: ModelsCreateNoteReque
         
         'title': value['title'],
         'templateId': value['templateId'],
+        'ownerId': value['ownerId'],
         'sections': value['sections'] == null ? undefined : ((value['sections'] as Array<any>).map(ModelsCreateSectionRequestToJSON)),
     };
 }

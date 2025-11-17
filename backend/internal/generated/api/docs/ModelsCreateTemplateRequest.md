@@ -5,13 +5,14 @@
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **Name** | **string** | テンプレート名 | 
+**OwnerId** | **string** | 所有者ID | 
 **Fields** | [**[]ModelsCreateFieldRequest**](ModelsCreateFieldRequest.md) | フィールド一覧 | 
 
 ## Methods
 
 ### NewModelsCreateTemplateRequest
 
-`func NewModelsCreateTemplateRequest(name string, fields []ModelsCreateFieldRequest, ) *ModelsCreateTemplateRequest`
+`func NewModelsCreateTemplateRequest(name string, ownerId string, fields []ModelsCreateFieldRequest, ) *ModelsCreateTemplateRequest`
 
 NewModelsCreateTemplateRequest instantiates a new ModelsCreateTemplateRequest object
 This constructor will assign default values to properties that have it defined,
@@ -44,6 +45,26 @@ and a boolean to check if the value has been set.
 `func (o *ModelsCreateTemplateRequest) SetName(v string)`
 
 SetName sets Name field to given value.
+
+
+### GetOwnerId
+
+`func (o *ModelsCreateTemplateRequest) GetOwnerId() string`
+
+GetOwnerId returns the OwnerId field if non-nil, zero value otherwise.
+
+### GetOwnerIdOk
+
+`func (o *ModelsCreateTemplateRequest) GetOwnerIdOk() (*string, bool)`
+
+GetOwnerIdOk returns a tuple with the OwnerId field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetOwnerId
+
+`func (o *ModelsCreateTemplateRequest) SetOwnerId(v string)`
+
+SetOwnerId sets OwnerId field to given value.
 
 
 ### GetFields

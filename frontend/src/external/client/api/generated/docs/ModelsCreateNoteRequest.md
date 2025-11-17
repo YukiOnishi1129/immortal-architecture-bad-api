@@ -9,6 +9,7 @@ Name | Type
 ------------ | -------------
 `title` | string
 `templateId` | string
+`ownerId` | string
 `sections` | [Array&lt;ModelsCreateSectionRequest&gt;](ModelsCreateSectionRequest.md)
 
 ## Example
@@ -20,6 +21,7 @@ import type { ModelsCreateNoteRequest } from ''
 const example = {
   "title": null,
   "templateId": null,
+  "ownerId": null,
   "sections": null,
 } satisfies ModelsCreateNoteRequest
 

@@ -8,6 +8,7 @@
 Name | Type
 ------------ | -------------
 `name` | string
+`ownerId` | string
 `fields` | [Array&lt;ModelsCreateFieldRequest&gt;](ModelsCreateFieldRequest.md)
 
 ## Example
@@ -18,6 +19,7 @@ import type { ModelsCreateTemplateRequest } from ''
 // TODO: Update the object below with actual values
 const example = {
   "name": null,
+  "ownerId": null,
   "fields": null,
 } satisfies ModelsCreateTemplateRequest
 

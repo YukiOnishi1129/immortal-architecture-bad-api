@@ -33,7 +33,7 @@ import (
 )
 
 func main() {
-	modelsCreateTemplateRequest := *openapiclient.NewModelsCreateTemplateRequest("Name_example", []openapiclient.ModelsCreateFieldRequest{*openapiclient.NewModelsCreateFieldRequest("Label_example", int32(123), false)}) // ModelsCreateTemplateRequest | 
+	modelsCreateTemplateRequest := *openapiclient.NewModelsCreateTemplateRequest("Name_example", "OwnerId_example", []openapiclient.ModelsCreateFieldRequest{*openapiclient.NewModelsCreateFieldRequest("Label_example", int32(123), false)}) // ModelsCreateTemplateRequest | 
 
 	configuration := openapiclient.NewConfiguration()
 	apiClient := openapiclient.NewAPIClient(configuration)

@@ -35,7 +35,7 @@ import (
 )
 
 func main() {
-	modelsCreateNoteRequest := *openapiclient.NewModelsCreateNoteRequest("Title_example", "TemplateId_example") // ModelsCreateNoteRequest | 
+	modelsCreateNoteRequest := *openapiclient.NewModelsCreateNoteRequest("Title_example", "TemplateId_example", "OwnerId_example") // ModelsCreateNoteRequest | 
 
 	configuration := openapiclient.NewConfiguration()
 	apiClient := openapiclient.NewAPIClient(configuration)

@@ -25,6 +25,8 @@ type ModelsCreateNoteRequest struct {
 	Title string `json:"title"`
 	// テンプレートID
 	TemplateId string `json:"templateId"`
+	// 所有者ID
+	OwnerId string `json:"ownerId"`
 	// セクション（オプション）
 	Sections []ModelsCreateSectionRequest `json:"sections,omitempty"`
 }
@@ -35,10 +37,11 @@ type _ModelsCreateNoteRequest ModelsCreateNoteRequest
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewModelsCreateNoteRequest(title string, templateId string) *ModelsCreateNoteRequest {
+func NewModelsCreateNoteRequest(title string, templateId string, ownerId string) *ModelsCreateNoteRequest {
 	this := ModelsCreateNoteRequest{}
 	this.Title = title
 	this.TemplateId = templateId
+	this.OwnerId = ownerId
 	return &this
 }
 
@@ -98,6 +101,30 @@ func (o *ModelsCreateNoteRequest) SetTemplateId(v string) {
 	o.TemplateId = v
 }
 
+// GetOwnerId returns the OwnerId field value
+func (o *ModelsCreateNoteRequest) GetOwnerId() string {
+	if o == nil {
+		var ret string
+		return ret
+	}
+
+	return o.OwnerId
+}
+
+// GetOwnerIdOk returns a tuple with the OwnerId field value
+// and a boolean to check if the value has been set.
+func (o *ModelsCreateNoteRequest) GetOwnerIdOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.OwnerId, true
+}
+
+// SetOwnerId sets field value
+func (o *ModelsCreateNoteRequest) SetOwnerId(v string) {
+	o.OwnerId = v
+}
+
 // GetSections returns the Sections field value if set, zero value otherwise.
 func (o *ModelsCreateNoteRequest) GetSections() []ModelsCreateSectionRequest {
 	if o == nil || IsNil(o.Sections) {
@@ -142,6 +169,7 @@ func (o ModelsCreateNoteRequest) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["title"] = o.Title
 	toSerialize["templateId"] = o.TemplateId
+	toSerialize["ownerId"] = o.OwnerId
 	if !IsNil(o.Sections) {
 		toSerialize["sections"] = o.Sections
 	}
@@ -155,6 +183,7 @@ func (o *ModelsCreateNoteRequest) UnmarshalJSON(data []byte) (err error) {
 	requiredProperties := []string{
 		"title",
 		"templateId",
+		"ownerId",
 	}
 
 	allProperties := make(map[string]interface{})
