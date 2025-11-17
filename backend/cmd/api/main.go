@@ -44,6 +44,28 @@ func main() {
 	e.HideBanner = true
 	e.Use(middleware.Recover())
 	e.Use(middleware.Logger())
+	corsOrigin := os.Getenv("CLIENT_ORIGIN")
+	corsConfig := middleware.CORSConfig{
+		AllowMethods: []string{
+			http.MethodGet,
+			http.MethodPost,
+			http.MethodPut,
+			http.MethodDelete,
+			http.MethodOptions,
+		},
+		AllowHeaders: []string{
+			echo.HeaderOrigin,
+			echo.HeaderContentType,
+			echo.HeaderAccept,
+			echo.HeaderAuthorization,
+		},
+		AllowCredentials: true,
+		AllowOrigins:     []string{"*"},
+	}
+	if corsOrigin != "" {
+		corsConfig.AllowOrigins = []string{corsOrigin}
+	}
+	e.Use(middleware.CORSWithConfig(corsConfig))
 
 	e.GET("/healthz", func(c echo.Context) error {
 		return c.String(http.StatusOK, "ok")
