@@ -12,7 +12,7 @@ echo "📘 Generating TypeScript code from OpenAPI..."
 
 rm -rf "${TS_TARGET_DIR}"
 
-npx openapi-generator-cli generate \
+pnpm exec openapi-generator-cli generate \
   -i "${PROJECT_ROOT}/generated/openapi.yaml" \
   -g typescript-fetch \
   -o "${TS_TARGET_DIR}" \

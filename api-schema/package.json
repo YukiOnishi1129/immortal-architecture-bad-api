@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "TypeSpec-based API schema for Mini Notion",
   "scripts": {
-    "generate": "npm run generate:openapi && npm run generate:go && npm run generate:ts",
+    "generate": "pnpm run generate:openapi && pnpm run generate:go && pnpm run generate:ts",
     "generate:openapi": "./scripts/generate-openapi.sh",
     "generate:go": "./scripts/generate-go.sh",
     "generate:ts": "./scripts/generate-ts.sh"
@@ -22,5 +22,6 @@
     "code-generation"
   ],
   "author": "Mini Notion Team",
-  "license": "MIT"
+  "license": "MIT",
+  "packageManager": "pnpm@10.22.0"
 }

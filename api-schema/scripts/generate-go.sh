@@ -12,7 +12,7 @@ echo "🐹 Generating Go code from OpenAPI..."
 
 rm -rf "${GO_TARGET_DIR}"
 
-npx openapi-generator-cli generate \
+pnpm exec openapi-generator-cli generate \
   -i "${PROJECT_ROOT}/generated/openapi.yaml" \
   -g go \
   -o "${GO_TARGET_DIR}" \

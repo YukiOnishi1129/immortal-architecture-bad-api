@@ -9,7 +9,7 @@ TSP_OUTPUT="${PROJECT_ROOT}/tsp-output/@typespec/openapi3/generated/openapi.yaml
 
 echo "📄 Generating OpenAPI YAML from TypeSpec..."
 
-tsp compile typespec --emit @typespec/openapi3
+pnpm exec tsp compile typespec --emit @typespec/openapi3
 
 if [ ! -f "${TSP_OUTPUT}" ]; then
   echo "❌ Failed to locate TypeSpec output at ${TSP_OUTPUT}"
