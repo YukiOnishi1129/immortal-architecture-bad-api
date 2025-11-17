@@ -4,7 +4,7 @@
   "description": "TypeSpec-based API schema for Mini Notion",
   "scripts": {
     "generate": "npm run generate:openapi && npm run generate:go && npm run generate:ts",
-    "generate:openapi": "tsp compile typespec --emit @typespec/openapi3",
+    "generate:openapi": "./scripts/generate-openapi.sh",
     "generate:go": "./scripts/generate-go.sh",
     "generate:ts": "./scripts/generate-ts.sh"
   },

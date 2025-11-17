@@ -1,17 +1,21 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
+
+SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+PROJECT_ROOT=$(cd -- "${SCRIPT_DIR}/.." && pwd)
+REPO_ROOT=$(cd -- "${PROJECT_ROOT}/.." && pwd)
+
+TS_TARGET_DIR="${REPO_ROOT}/frontend/src/external/client/api/generated"
 
 echo "📘 Generating TypeScript code from OpenAPI..."
 
-# 生成先ディレクトリをクリーンアップ
-rm -rf generated/typescript
+rm -rf "${TS_TARGET_DIR}"
 
-# OpenAPI Generatorを使ってTypeScriptコードを生成
 npx openapi-generator-cli generate \
-  -i generated/openapi.yaml \
-  -g typescript-axios \
-  -o generated/typescript \
-  --additional-properties=withSeparateModelsAndApi=true,apiPackage=client,modelPackage=models,supportsES6=true,useSingleRequestParameter=true
+  -i "${PROJECT_ROOT}/generated/openapi.yaml" \
+  -g typescript-fetch \
+  -o "${TS_TARGET_DIR}" \
+  --additional-properties=withSeparateModelsAndApi=false,supportsES6=true,useSingleRequestParameter=true
 
-echo "✅ TypeScript code generated at: generated/typescript/"
+echo "✅ TypeScript code generated at: ${TS_TARGET_DIR}"

@@ -32,7 +32,7 @@ linters-settings:
 
 issues:
   exclude-dirs:
-    - internal/generated
+    - internal/generated # auto-generated API clients/models
     - .gomodcache
   exclude-use-default: false
   max-same-issues: 3
