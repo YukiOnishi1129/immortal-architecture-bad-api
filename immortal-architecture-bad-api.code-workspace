@@ -9,8 +9,16 @@
 			"name": "📚 DOCS"
 		},
 		{
+			"path": "./api-schema",
+			"name": "📐 API SCHEMA"
+		},
+		{
 			"path": "./frontend/",
 			"name": "💻 FRONTEND"
+		},
+		{
+			"path": "./backend/",
+			"name": "🛠️ BACKEND"
 		}
 	]
 }
