@@ -27,10 +27,8 @@ api-schema/
 │   │   └── accounts.tsp
 │   ├── main.tsp          # エントリーポイント
 │   └── tspconfig.yaml    # TypeSpec設定
-├── generated/            # 自動生成コード
-│   ├── openapi.yaml      # 生成されたOpenAPI仕様
-│   ├── go/               # Go生成コード
-│   └── typescript/       # TypeScript生成コード
+├── generated/            # 自動生成アセット
+│   └── openapi.yaml      # TypeSpec→OpenAPIの成果物（Go/TSは各プロジェクトへ配置）
 ├── scripts/              # 生成スクリプト
 │   ├── generate.sh
 │   ├── generate-openapi.sh
@@ -45,12 +43,12 @@ api-schema/
 ### 必要な環境
 
 - Node.js 20+
-- npm または pnpm
+- pnpm 9+
 
 ### インストール
 
 ```bash
-npm install
+pnpm install
 ```
 
 ## 使い方
@@ -60,7 +58,7 @@ npm install
 TypeSpecからOpenAPI YAML、Go、TypeScriptのコードを一括生成します。
 
 ```bash
-npm run generate
+pnpm run generate
 ```
 
 ### 個別生成
@@ -68,19 +66,19 @@ npm run generate
 #### OpenAPI YAMLの生成
 
 ```bash
-npm run generate:openapi
+pnpm run generate:openapi
 ```
 
 #### Goコードの生成
 
 ```bash
-npm run generate:go
+pnpm run generate:go
 ```
 
 #### TypeScriptコードの生成
 
 ```bash
-npm run generate:ts
+pnpm run generate:ts
 ```
 
 ## TypeSpec定義の編集
@@ -118,7 +116,7 @@ interface Notes {
 TypeSpecを編集したら、以下のコマンドで生成コードを更新します。
 
 ```bash
-npm run generate
+pnpm run generate
 ```
 
 ## 生成されたコードの使用
