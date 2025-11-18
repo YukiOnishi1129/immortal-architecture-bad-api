@@ -54,27 +54,24 @@ func (h *NoteController) listNotes(c echo.Context) error {
 
 	notes, err := h.service.ListNotes(c.Request().Context(), filters)
 	if err != nil {
-		return respondError(c, http.StatusInternalServerError, "failed to list notes")
+		return respondError(c, http.StatusInternalServerError, "failed to list notes", err)
 	}
 	return c.JSON(http.StatusOK, notes)
 }
 
 func (h *NoteController) getNote(c echo.Context) error {
 	noteID := c.Param("noteId")
-	note, sections, err := h.service.GetNote(c.Request().Context(), noteID)
+	note, err := h.service.GetNote(c.Request().Context(), noteID)
 	if err != nil {
 		if errors.Is(err, service.ErrNoteNotFound) {
-			return respondError(c, http.StatusNotFound, "note not found")
+			return respondError(c, http.StatusNotFound, "note not found", err)
 		}
 		if errors.Is(err, service.ErrInvalidNoteID) {
-			return respondError(c, http.StatusBadRequest, "invalid note id")
+			return respondError(c, http.StatusBadRequest, "invalid note id", err)
 		}
-		return respondError(c, http.StatusInternalServerError, "failed to fetch note")
+		return respondError(c, http.StatusInternalServerError, "failed to fetch note", err)
 	}
-	return c.JSON(http.StatusOK, map[string]any{
-		"note":     note,
-		"sections": sections,
-	})
+	return c.JSON(http.StatusOK, note)
 }
 
 func (h *NoteController) createNote(c echo.Context) error {
@@ -85,18 +82,18 @@ func (h *NoteController) createNote(c echo.Context) error {
 		Sections   map[string]string `json:"sections"`
 	}
 	if err := c.Bind(&payload); err != nil {
-		return respondError(c, http.StatusBadRequest, "invalid payload")
+		return respondError(c, http.StatusBadRequest, "invalid payload", err)
 	}
 	if strings.TrimSpace(payload.Title) == "" {
-		return respondError(c, http.StatusBadRequest, "title is required")
+		return respondError(c, http.StatusBadRequest, "title is required", nil)
 	}
 	if strings.TrimSpace(payload.TemplateID) == "" || strings.TrimSpace(payload.OwnerID) == "" {
-		return respondError(c, http.StatusBadRequest, "templateId and ownerId are required")
+		return respondError(c, http.StatusBadRequest, "templateId and ownerId are required", nil)
 	}
 
 	note, err := h.service.CreateNote(c.Request().Context(), payload.OwnerID, payload.TemplateID, payload.Title, payload.Sections)
 	if err != nil {
-		return respondError(c, http.StatusInternalServerError, "failed to create note")
+		return respondError(c, http.StatusInternalServerError, "failed to create note", err)
 	}
 	return c.JSON(http.StatusCreated, note)
 }
@@ -109,21 +106,21 @@ func (h *NoteController) updateNote(c echo.Context) error {
 		Sections map[string]string `json:"sections"`
 	}
 	if err := c.Bind(&payload); err != nil {
-		return respondError(c, http.StatusBadRequest, "invalid payload")
+		return respondError(c, http.StatusBadRequest, "invalid payload", err)
 	}
 	if strings.TrimSpace(payload.Title) == "" {
-		return respondError(c, http.StatusBadRequest, "title is required")
+		return respondError(c, http.StatusBadRequest, "title is required", nil)
 	}
 
 	note, err := h.service.UpdateNote(c.Request().Context(), noteID, payload.Title, payload.Sections)
 	if err != nil {
 		if errors.Is(err, service.ErrNoteNotFound) {
-			return respondError(c, http.StatusNotFound, "note not found")
+			return respondError(c, http.StatusNotFound, "note not found", err)
 		}
 		if errors.Is(err, service.ErrInvalidNoteID) {
-			return respondError(c, http.StatusBadRequest, "invalid note id")
+			return respondError(c, http.StatusBadRequest, "invalid note id", err)
 		}
-		return respondError(c, http.StatusInternalServerError, "failed to update note")
+		return respondError(c, http.StatusInternalServerError, "failed to update note", err)
 	}
 
 	return c.JSON(http.StatusOK, note)
@@ -142,12 +139,12 @@ func (h *NoteController) changeStatus(c echo.Context, status string) error {
 	note, err := h.service.ChangeStatus(c.Request().Context(), noteID, status)
 	if err != nil {
 		if errors.Is(err, service.ErrNoteNotFound) {
-			return respondError(c, http.StatusNotFound, "note not found")
+			return respondError(c, http.StatusNotFound, "note not found", err)
 		}
 		if errors.Is(err, service.ErrInvalidNoteID) {
-			return respondError(c, http.StatusBadRequest, "invalid note id")
+			return respondError(c, http.StatusBadRequest, "invalid note id", err)
 		}
-		return respondError(c, http.StatusInternalServerError, "failed to change status")
+		return respondError(c, http.StatusInternalServerError, "failed to change status", err)
 	}
 	return c.JSON(http.StatusOK, note)
 }
@@ -156,12 +153,12 @@ func (h *NoteController) deleteNote(c echo.Context) error {
 	noteID := c.Param("noteId")
 	if err := h.service.DeleteNote(c.Request().Context(), noteID); err != nil {
 		if errors.Is(err, service.ErrNoteNotFound) {
-			return respondError(c, http.StatusNotFound, "note not found")
+			return respondError(c, http.StatusNotFound, "note not found", err)
 		}
 		if errors.Is(err, service.ErrInvalidNoteID) {
-			return respondError(c, http.StatusBadRequest, "invalid note id")
+			return respondError(c, http.StatusBadRequest, "invalid note id", err)
 		}
-		return respondError(c, http.StatusInternalServerError, "failed to delete note")
+		return respondError(c, http.StatusInternalServerError, "failed to delete note", err)
 	}
 	return c.NoContent(http.StatusNoContent)
 }

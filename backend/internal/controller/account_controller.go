@@ -3,6 +3,7 @@ package controller
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -58,11 +59,11 @@ func (req *createOrGetAccountRequest) validate() string {
 func (h *AccountController) createOrGetAccount(c echo.Context) error {
 	var payload createOrGetAccountRequest
 	if err := c.Bind(&payload); err != nil {
-		return respondError(c, http.StatusBadRequest, "invalid payload")
+		return respondError(c, http.StatusBadRequest, "invalid payload", err)
 	}
 
 	if msg := payload.validate(); msg != "" {
-		return respondError(c, http.StatusBadRequest, msg)
+		return respondError(c, http.StatusBadRequest, msg, nil)
 	}
 
 	account, err := h.service.CreateOrGetAccount(
@@ -76,7 +77,7 @@ func (h *AccountController) createOrGetAccount(c echo.Context) error {
 		},
 	)
 	if err != nil {
-		return respondError(c, http.StatusInternalServerError, "failed to upsert account")
+		return respondError(c, http.StatusInternalServerError, "failed to upsert account", err)
 	}
 
 	return c.JSON(http.StatusOK, newAccountResponse(account))
@@ -85,18 +86,18 @@ func (h *AccountController) createOrGetAccount(c echo.Context) error {
 func (h *AccountController) getAccountByID(c echo.Context) error {
 	accountID := c.Param("accountId")
 	if strings.TrimSpace(accountID) == "" {
-		return respondError(c, http.StatusBadRequest, "account id is required")
+		return respondError(c, http.StatusBadRequest, "account id is required", nil)
 	}
 
 	account, err := h.service.GetAccountByID(c.Request().Context(), accountID)
 	if err != nil {
 		if errors.Is(err, service.ErrAccountNotFound) {
-			return respondError(c, http.StatusNotFound, "account not found")
+			return respondError(c, http.StatusNotFound, "account not found", err)
 		}
 		if errors.Is(err, service.ErrInvalidAccountID) {
-			return respondError(c, http.StatusBadRequest, "invalid account id")
+			return respondError(c, http.StatusBadRequest, "invalid account id", err)
 		}
-		return respondError(c, http.StatusInternalServerError, "failed to fetch account")
+		return respondError(c, http.StatusInternalServerError, "failed to fetch account", err)
 	}
 
 	return c.JSON(http.StatusOK, newAccountResponse(account))
@@ -109,18 +110,18 @@ func (h *AccountController) getCurrentAccount(c echo.Context) error {
 	}
 
 	if accountID == "" {
-		return respondError(c, http.StatusUnauthorized, "missing X-Account-ID header")
+		return respondError(c, http.StatusUnauthorized, "missing X-Account-ID header", nil)
 	}
 
 	account, err := h.service.GetAccountByID(c.Request().Context(), accountID)
 	if err != nil {
 		if errors.Is(err, service.ErrAccountNotFound) {
-			return respondError(c, http.StatusNotFound, "account not found")
+			return respondError(c, http.StatusNotFound, "account not found", err)
 		}
 		if errors.Is(err, service.ErrInvalidAccountID) {
-			return respondError(c, http.StatusBadRequest, "invalid account id")
+			return respondError(c, http.StatusBadRequest, "invalid account id", err)
 		}
-		return respondError(c, http.StatusInternalServerError, "failed to fetch account")
+		return respondError(c, http.StatusInternalServerError, "failed to fetch account", err)
 	}
 
 	return c.JSON(http.StatusOK, newAccountResponse(account))
@@ -191,7 +192,11 @@ func timeToRFC3339(ts pgtype.Timestamptz) *string {
 	return &formatted
 }
 
-func respondError(c echo.Context, status int, message string) error {
+func respondError(c echo.Context, status int, message string, err error) error {
+	if err != nil {
+		log.Printf("[controller] status=%d path=%s remote=%s message=%s err=%v",
+			status, c.Path(), c.RealIP(), message, err)
+	}
 	return c.JSON(status, map[string]string{
 		"code":    http.StatusText(status),
 		"message": message,

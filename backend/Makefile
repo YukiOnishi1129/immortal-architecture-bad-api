@@ -7,7 +7,7 @@ SQLC ?= sqlc
 MIGRATIONS_DIR ?= $(CURDIR)/migrations
 ENV_FILE ?= $(CURDIR)/.env
 
-.PHONY: lint tidy migrate-create migrate-up migrate-down migrate-force sqlc build dev
+.PHONY: lint tidy migrate-create migrate-up migrate-down migrate-force sqlc build dev oapi
 
 lint:
 	@GOCACHE=$(GOCACHE) GOMODCACHE=$(GOMODCACHE) $(GOLANGCI_LINT) run ./...
@@ -25,6 +25,9 @@ build:
 
 dev:
 	@$(GOBIN)/air
+
+oapi:
+	@./scripts/generate-oapi.sh
 
 migrate-create:
 	@if [ -z "$(name)" ]; then echo "Usage: make migrate-create name=add_notes_table"; exit 1; fi

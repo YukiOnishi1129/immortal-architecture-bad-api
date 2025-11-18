@@ -67,7 +67,7 @@ func (h *TemplateController) listTemplates(c echo.Context) error {
 
 	templates, err := h.service.ListTemplates(c.Request().Context(), filters)
 	if err != nil {
-		return respondError(c, http.StatusInternalServerError, "failed to list templates")
+		return respondError(c, http.StatusInternalServerError, "failed to list templates", err)
 	}
 
 	return c.JSON(http.StatusOK, templates)
@@ -78,12 +78,12 @@ func (h *TemplateController) getTemplate(c echo.Context) error {
 	template, err := h.service.GetTemplate(c.Request().Context(), templateID)
 	if err != nil {
 		if errors.Is(err, service.ErrTemplateNotFound) {
-			return respondError(c, http.StatusNotFound, "template not found")
+			return respondError(c, http.StatusNotFound, "template not found", err)
 		}
 		if errors.Is(err, service.ErrInvalidTemplateID) {
-			return respondError(c, http.StatusBadRequest, "invalid template id")
+			return respondError(c, http.StatusBadRequest, "invalid template id", err)
 		}
-		return respondError(c, http.StatusInternalServerError, "failed to fetch template")
+		return respondError(c, http.StatusInternalServerError, "failed to fetch template", err)
 	}
 	return c.JSON(http.StatusOK, template)
 }
@@ -91,10 +91,10 @@ func (h *TemplateController) getTemplate(c echo.Context) error {
 func (h *TemplateController) createTemplate(c echo.Context) error {
 	var payload templatePayload
 	if err := c.Bind(&payload); err != nil {
-		return respondError(c, http.StatusBadRequest, "invalid payload")
+		return respondError(c, http.StatusBadRequest, "invalid payload", err)
 	}
 	if msg := payload.validate(); msg != "" {
-		return respondError(c, http.StatusBadRequest, msg)
+		return respondError(c, http.StatusBadRequest, msg, nil)
 	}
 
 	fields := make([]sqldb.Field, len(payload.Fields))
@@ -108,7 +108,7 @@ func (h *TemplateController) createTemplate(c echo.Context) error {
 
 	template, err := h.service.CreateTemplate(c.Request().Context(), payload.OwnerID, payload.Name, fields)
 	if err != nil {
-		return respondError(c, http.StatusInternalServerError, "failed to create template")
+		return respondError(c, http.StatusInternalServerError, "failed to create template", err)
 	}
 	return c.JSON(http.StatusCreated, template)
 }
@@ -119,21 +119,21 @@ func (h *TemplateController) updateTemplate(c echo.Context) error {
 		Name string `json:"name"`
 	}
 	if err := c.Bind(&payload); err != nil {
-		return respondError(c, http.StatusBadRequest, "invalid payload")
+		return respondError(c, http.StatusBadRequest, "invalid payload", err)
 	}
 	if strings.TrimSpace(payload.Name) == "" {
-		return respondError(c, http.StatusBadRequest, "name is required")
+		return respondError(c, http.StatusBadRequest, "name is required", nil)
 	}
 
 	template, err := h.service.UpdateTemplate(c.Request().Context(), templateID, payload.Name)
 	if err != nil {
 		if errors.Is(err, service.ErrTemplateNotFound) {
-			return respondError(c, http.StatusNotFound, "template not found")
+			return respondError(c, http.StatusNotFound, "template not found", err)
 		}
 		if errors.Is(err, service.ErrInvalidTemplateID) {
-			return respondError(c, http.StatusBadRequest, "invalid template id")
+			return respondError(c, http.StatusBadRequest, "invalid template id", err)
 		}
-		return respondError(c, http.StatusInternalServerError, "failed to update template")
+		return respondError(c, http.StatusInternalServerError, "failed to update template", err)
 	}
 
 	return c.JSON(http.StatusOK, template)
@@ -144,15 +144,15 @@ func (h *TemplateController) deleteTemplate(c echo.Context) error {
 	err := h.service.DeleteTemplate(c.Request().Context(), templateID)
 	if err != nil {
 		if errors.Is(err, service.ErrTemplateNotFound) {
-			return respondError(c, http.StatusNotFound, "template not found")
+			return respondError(c, http.StatusNotFound, "template not found", err)
 		}
 		if errors.Is(err, service.ErrTemplateInUse) {
-			return respondError(c, http.StatusConflict, "template in use")
+			return respondError(c, http.StatusConflict, "template in use", err)
 		}
 		if errors.Is(err, service.ErrInvalidTemplateID) {
-			return respondError(c, http.StatusBadRequest, "invalid template id")
+			return respondError(c, http.StatusBadRequest, "invalid template id", err)
 		}
-		return respondError(c, http.StatusInternalServerError, "failed to delete template")
+		return respondError(c, http.StatusInternalServerError, "failed to delete template", err)
 	}
 	return c.NoContent(http.StatusNoContent)
 }

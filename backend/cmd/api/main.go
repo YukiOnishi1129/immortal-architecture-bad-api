@@ -14,10 +14,11 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
-	"immortal-architecture-bad-api/backend/internal/controller"
 	dbpkg "immortal-architecture-bad-api/backend/internal/db"
 	sqldb "immortal-architecture-bad-api/backend/internal/db/sqlc"
+	openapi "immortal-architecture-bad-api/backend/internal/generated/openapi"
 	"immortal-architecture-bad-api/backend/internal/service"
+	"immortal-architecture-bad-api/backend/internal/transport"
 )
 
 func main() {
@@ -71,15 +72,8 @@ func main() {
 		return c.String(http.StatusOK, "ok")
 	})
 
-	apiGroup := e.Group("/api")
-	accountController := controller.NewAccountController(accountService)
-	accountController.Register(apiGroup.Group("/accounts"))
-
-	templateController := controller.NewTemplateController(templateService)
-	templateController.Register(apiGroup.Group("/templates"))
-
-	noteController := controller.NewNoteController(noteService)
-	noteController.Register(apiGroup.Group("/notes"))
+	handler := transport.NewHandler(accountService, templateService, noteService)
+	openapi.RegisterHandlers(e, handler)
 
 	port := os.Getenv("API_PORT")
 	if port == "" {

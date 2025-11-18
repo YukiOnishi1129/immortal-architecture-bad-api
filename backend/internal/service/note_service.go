@@ -6,8 +6,10 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	sqldb "immortal-architecture-bad-api/backend/internal/db/sqlc"
+	openapi "immortal-architecture-bad-api/backend/internal/generated/openapi"
 )
 
 var (
@@ -36,7 +38,7 @@ type NoteFilters struct {
 }
 
 // ListNotes returns note list with filters.
-func (s *NoteService) ListNotes(ctx context.Context, filters NoteFilters) ([]*sqldb.ListNotesRow, error) {
+func (s *NoteService) ListNotes(ctx context.Context, filters NoteFilters) ([]*openapi.ModelsNoteResponse, error) {
 	params := &sqldb.ListNotesParams{}
 
 	if filters.Status != nil && *filters.Status != "" {
@@ -56,34 +58,60 @@ func (s *NoteService) ListNotes(ctx context.Context, filters NoteFilters) ([]*sq
 		params.Column4 = *filters.Query
 	}
 
-	return s.queries.ListNotes(ctx, params)
+	rows, err := s.queries.ListNotes(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*openapi.ModelsNoteResponse, 0, len(rows))
+	for _, row := range rows {
+		res, err := s.composeNoteResponse(ctx, noteResponseInput{
+			ID:           row.ID,
+			Title:        row.Title,
+			TemplateID:   row.TemplateID,
+			OwnerID:      row.OwnerID,
+			Status:       row.Status,
+			CreatedAt:    row.CreatedAt,
+			UpdatedAt:    row.UpdatedAt,
+			TemplateName: row.TemplateName,
+		})
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, res)
+	}
+	return result, nil
 }
 
 // GetNote returns a note by ID.
-func (s *NoteService) GetNote(ctx context.Context, id string) (*sqldb.GetNoteByIDRow, []*sqldb.ListSectionsByNoteRow, error) {
+func (s *NoteService) GetNote(ctx context.Context, id string) (*openapi.ModelsNoteResponse, error) {
 	noteID, err := parseUUID(id)
 	if err != nil {
-		return nil, nil, ErrInvalidNoteID
+		return nil, ErrInvalidNoteID
 	}
 
 	note, err := s.queries.GetNoteByID(ctx, noteID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil, ErrNoteNotFound
+			return nil, ErrNoteNotFound
 		}
-		return nil, nil, err
+		return nil, err
 	}
 
-	sections, err := s.queries.ListSectionsByNote(ctx, noteID)
-	if err != nil {
-		return note, nil, err
-	}
-
-	return note, sections, nil
+	return s.composeNoteResponse(ctx, noteResponseInput{
+		ID:           note.ID,
+		Title:        note.Title,
+		TemplateID:   note.TemplateID,
+		OwnerID:      note.OwnerID,
+		Status:       note.Status,
+		CreatedAt:    note.CreatedAt,
+		UpdatedAt:    note.UpdatedAt,
+		TemplateName: note.TemplateName,
+	})
 }
 
 // CreateNote creates note and sections.
-func (s *NoteService) CreateNote(ctx context.Context, ownerID, templateID, title string, sections map[string]string) (*sqldb.Note, error) {
+func (s *NoteService) CreateNote(ctx context.Context, ownerID, templateID, title string, sections map[string]string) (*openapi.ModelsNoteResponse, error) {
 	ownerUUID, err := parseUUID(ownerID)
 	if err != nil {
 		return nil, ErrInvalidAccountID
@@ -106,22 +134,30 @@ func (s *NoteService) CreateNote(ctx context.Context, ownerID, templateID, title
 	for fieldID, content := range sections {
 		fid, parseErr := parseUUID(fieldID)
 		if parseErr != nil {
-			return note, parseErr
+			return nil, parseErr
 		}
 		if _, err = s.queries.CreateSection(ctx, &sqldb.CreateSectionParams{
 			NoteID:  note.ID,
 			FieldID: fid,
 			Content: content,
 		}); err != nil {
-			return note, err
+			return nil, err
 		}
 	}
 
-	return note, nil
+	return s.composeNoteResponse(ctx, noteResponseInput{
+		ID:         note.ID,
+		Title:      note.Title,
+		TemplateID: note.TemplateID,
+		OwnerID:    note.OwnerID,
+		Status:     note.Status,
+		CreatedAt:  note.CreatedAt,
+		UpdatedAt:  note.UpdatedAt,
+	})
 }
 
 // UpdateNote updates title and sections.
-func (s *NoteService) UpdateNote(ctx context.Context, id, title string, sections map[string]string) (*sqldb.Note, error) {
+func (s *NoteService) UpdateNote(ctx context.Context, id, title string, sections map[string]string) (*openapi.ModelsNoteResponse, error) {
 	noteID, err := parseUUID(id)
 	if err != nil {
 		return nil, ErrInvalidNoteID
@@ -141,21 +177,29 @@ func (s *NoteService) UpdateNote(ctx context.Context, id, title string, sections
 	for sectionID, content := range sections {
 		secUUID, parseErr := parseUUID(sectionID)
 		if parseErr != nil {
-			return note, parseErr
+			return nil, parseErr
 		}
 		if _, err := s.queries.UpdateSectionContent(ctx, &sqldb.UpdateSectionContentParams{
 			ID:      secUUID,
 			Content: content,
 		}); err != nil {
-			return note, err
+			return nil, err
 		}
 	}
 
-	return note, nil
+	return s.composeNoteResponse(ctx, noteResponseInput{
+		ID:         note.ID,
+		Title:      note.Title,
+		TemplateID: note.TemplateID,
+		OwnerID:    note.OwnerID,
+		Status:     note.Status,
+		CreatedAt:  note.CreatedAt,
+		UpdatedAt:  note.UpdatedAt,
+	})
 }
 
 // ChangeStatus toggles note status.
-func (s *NoteService) ChangeStatus(ctx context.Context, id, status string) (*sqldb.Note, error) {
+func (s *NoteService) ChangeStatus(ctx context.Context, id, status string) (*openapi.ModelsNoteResponse, error) {
 	noteID, err := parseUUID(id)
 	if err != nil {
 		return nil, ErrInvalidNoteID
@@ -175,7 +219,15 @@ func (s *NoteService) ChangeStatus(ctx context.Context, id, status string) (*sql
 		}
 		return nil, err
 	}
-	return note, nil
+	return s.composeNoteResponse(ctx, noteResponseInput{
+		ID:         note.ID,
+		Title:      note.Title,
+		TemplateID: note.TemplateID,
+		OwnerID:    note.OwnerID,
+		Status:     note.Status,
+		CreatedAt:  note.CreatedAt,
+		UpdatedAt:  note.UpdatedAt,
+	})
 }
 
 // DeleteNote removes note and sections.
@@ -192,4 +244,77 @@ func (s *NoteService) DeleteNote(ctx context.Context, id string) error {
 		return err
 	}
 	return nil
+}
+
+type noteResponseInput struct {
+	ID           pgtype.UUID
+	Title        string
+	TemplateID   pgtype.UUID
+	OwnerID      pgtype.UUID
+	Status       string
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	TemplateName string
+}
+
+func (s *NoteService) composeNoteResponse(ctx context.Context, input noteResponseInput) (*openapi.ModelsNoteResponse, error) {
+	templateName := input.TemplateName
+	if strings.TrimSpace(templateName) == "" {
+		template, err := s.queries.GetTemplateByID(ctx, input.TemplateID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil, ErrInvalidTemplateID
+			}
+			return nil, err
+		}
+		templateName = template.Name
+	}
+
+	owner, err := s.queries.GetAccountByID(ctx, input.OwnerID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrAccountNotFound
+		}
+		return nil, err
+	}
+
+	sections, err := s.queries.ListSectionsByNote(ctx, input.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	sectionResponses := make([]openapi.ModelsSection, 0, len(sections))
+	for _, section := range sections {
+		sectionResponses = append(sectionResponses, openapi.ModelsSection{
+			Id:         uuidToString(section.ID),
+			FieldId:    uuidToString(section.FieldID),
+			FieldLabel: section.Label,
+			Content:    section.Content,
+			IsRequired: section.IsRequired,
+		})
+	}
+
+	status := openapi.ModelsNoteStatus(input.Status)
+	if status != openapi.ModelsNoteStatusDraft && status != openapi.ModelsNoteStatusPublish {
+		status = openapi.ModelsNoteStatusDraft
+	}
+	response := &openapi.ModelsNoteResponse{
+		Id:           uuidToString(input.ID),
+		Title:        input.Title,
+		TemplateId:   uuidToString(input.TemplateID),
+		TemplateName: templateName,
+		OwnerId:      uuidToString(input.OwnerID),
+		Owner: openapi.ModelsAccountSummary{
+			Id:        uuidToString(owner.ID),
+			FirstName: owner.FirstName,
+			LastName:  owner.LastName,
+			Thumbnail: textToPointer(owner.Thumbnail),
+		},
+		Status:    status,
+		Sections:  sectionResponses,
+		CreatedAt: input.CreatedAt.Time,
+		UpdatedAt: input.UpdatedAt.Time,
+	}
+
+	return response, nil
 }
