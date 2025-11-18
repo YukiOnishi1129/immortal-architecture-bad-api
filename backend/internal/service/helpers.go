@@ -3,7 +3,6 @@ package service
 import (
 	"errors"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -36,13 +35,6 @@ func uuidToString(id pgtype.UUID) string {
 		return ""
 	}
 	return u.String()
-}
-
-func timestamptzToRFC3339(ts pgtype.Timestamptz) string {
-	if !ts.Valid {
-		return ""
-	}
-	return ts.Time.UTC().Format(time.RFC3339)
 }
 
 func textToPointer(val pgtype.Text) *string {

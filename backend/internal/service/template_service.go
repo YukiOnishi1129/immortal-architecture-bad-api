@@ -8,8 +8,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	openapi "immortal-architecture-bad-api/backend/internal/generated/openapi"
 	sqldb "immortal-architecture-bad-api/backend/internal/db/sqlc"
+	openapi "immortal-architecture-bad-api/backend/internal/generated/openapi"
 )
 
 var (

@@ -1,3 +1,4 @@
+// Package transport bridges generated OpenAPI handlers to legacy services.
 package transport
 
 import (
@@ -78,11 +79,12 @@ func (h *Handler) AccountsGetCurrentAccount(ctx echo.Context) error {
 }
 
 // AccountsGetAccountById returns account by ID.
-func (h *Handler) AccountsGetAccountById(ctx echo.Context, accountId string) error {
-	if strings.TrimSpace(accountId) == "" {
+// revive:disable-next-line:var-naming // Method name fixed by generated interface.
+func (h *Handler) AccountsGetAccountById(ctx echo.Context, accountID string) error {
+	if strings.TrimSpace(accountID) == "" {
 		return respondError(ctx, http.StatusBadRequest, "account id is required")
 	}
-	account, err := h.accountService.GetAccountByID(ctx.Request().Context(), accountId)
+	account, err := h.accountService.GetAccountByID(ctx.Request().Context(), accountID)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrAccountNotFound):
@@ -153,8 +155,8 @@ func (h *Handler) NotesCreateNote(ctx echo.Context) error {
 }
 
 // NotesDeleteNote deletes note.
-func (h *Handler) NotesDeleteNote(ctx echo.Context, noteId string) error {
-	if err := h.noteService.DeleteNote(ctx.Request().Context(), noteId); err != nil {
+func (h *Handler) NotesDeleteNote(ctx echo.Context, noteID string) error {
+	if err := h.noteService.DeleteNote(ctx.Request().Context(), noteID); err != nil {
 		switch {
 		case errors.Is(err, service.ErrNoteNotFound):
 			return respondError(ctx, http.StatusNotFound, "note not found")
@@ -168,8 +170,9 @@ func (h *Handler) NotesDeleteNote(ctx echo.Context, noteId string) error {
 }
 
 // NotesGetNoteById returns note detail.
-func (h *Handler) NotesGetNoteById(ctx echo.Context, noteId string) error {
-	note, err := h.noteService.GetNote(ctx.Request().Context(), noteId)
+// revive:disable-next-line:var-naming // Method name fixed by generated interface.
+func (h *Handler) NotesGetNoteById(ctx echo.Context, noteID string) error {
+	note, err := h.noteService.GetNote(ctx.Request().Context(), noteID)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrNoteNotFound):
@@ -184,7 +187,7 @@ func (h *Handler) NotesGetNoteById(ctx echo.Context, noteId string) error {
 }
 
 // NotesUpdateNote updates note.
-func (h *Handler) NotesUpdateNote(ctx echo.Context, noteId string) error {
+func (h *Handler) NotesUpdateNote(ctx echo.Context, noteID string) error {
 	var body openapi.NotesUpdateNoteJSONRequestBody
 	if err := ctx.Bind(&body); err != nil {
 		return respondError(ctx, http.StatusBadRequest, "invalid payload")
@@ -197,7 +200,7 @@ func (h *Handler) NotesUpdateNote(ctx echo.Context, noteId string) error {
 		sections[section.Id] = section.Content
 	}
 
-	note, err := h.noteService.UpdateNote(ctx.Request().Context(), noteId, body.Title, sections)
+	note, err := h.noteService.UpdateNote(ctx.Request().Context(), noteID, body.Title, sections)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrNoteNotFound):
@@ -212,17 +215,17 @@ func (h *Handler) NotesUpdateNote(ctx echo.Context, noteId string) error {
 }
 
 // NotesPublishNote publishes note.
-func (h *Handler) NotesPublishNote(ctx echo.Context, noteId string) error {
-	return h.changeNoteStatus(ctx, noteId, "Publish")
+func (h *Handler) NotesPublishNote(ctx echo.Context, noteID string) error {
+	return h.changeNoteStatus(ctx, noteID, "Publish")
 }
 
 // NotesUnpublishNote unpublishes note.
-func (h *Handler) NotesUnpublishNote(ctx echo.Context, noteId string) error {
-	return h.changeNoteStatus(ctx, noteId, "Draft")
+func (h *Handler) NotesUnpublishNote(ctx echo.Context, noteID string) error {
+	return h.changeNoteStatus(ctx, noteID, "Draft")
 }
 
-func (h *Handler) changeNoteStatus(ctx echo.Context, noteId, status string) error {
-	note, err := h.noteService.ChangeStatus(ctx.Request().Context(), noteId, status)
+func (h *Handler) changeNoteStatus(ctx echo.Context, noteID, status string) error {
+	note, err := h.noteService.ChangeStatus(ctx.Request().Context(), noteID, status)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrNoteNotFound):
@@ -282,8 +285,8 @@ func (h *Handler) TemplatesCreateTemplate(ctx echo.Context) error {
 }
 
 // TemplatesDeleteTemplate deletes template.
-func (h *Handler) TemplatesDeleteTemplate(ctx echo.Context, templateId string) error {
-	if err := h.templateService.DeleteTemplate(ctx.Request().Context(), templateId); err != nil {
+func (h *Handler) TemplatesDeleteTemplate(ctx echo.Context, templateID string) error {
+	if err := h.templateService.DeleteTemplate(ctx.Request().Context(), templateID); err != nil {
 		switch {
 		case errors.Is(err, service.ErrTemplateNotFound):
 			return respondError(ctx, http.StatusNotFound, "template not found")
@@ -299,8 +302,9 @@ func (h *Handler) TemplatesDeleteTemplate(ctx echo.Context, templateId string) e
 }
 
 // TemplatesGetTemplateById returns template detail.
-func (h *Handler) TemplatesGetTemplateById(ctx echo.Context, templateId string) error {
-	template, err := h.templateService.GetTemplate(ctx.Request().Context(), templateId)
+// revive:disable-next-line:var-naming // Method name fixed by generated interface.
+func (h *Handler) TemplatesGetTemplateById(ctx echo.Context, templateID string) error {
+	template, err := h.templateService.GetTemplate(ctx.Request().Context(), templateID)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrTemplateNotFound):
@@ -315,7 +319,7 @@ func (h *Handler) TemplatesGetTemplateById(ctx echo.Context, templateId string) 
 }
 
 // TemplatesUpdateTemplate updates template name.
-func (h *Handler) TemplatesUpdateTemplate(ctx echo.Context, templateId string) error {
+func (h *Handler) TemplatesUpdateTemplate(ctx echo.Context, templateID string) error {
 	var body openapi.TemplatesUpdateTemplateJSONRequestBody
 	if err := ctx.Bind(&body); err != nil {
 		return respondError(ctx, http.StatusBadRequest, "invalid payload")
@@ -324,7 +328,7 @@ func (h *Handler) TemplatesUpdateTemplate(ctx echo.Context, templateId string) e
 		return respondError(ctx, http.StatusBadRequest, "name is required")
 	}
 
-	template, err := h.templateService.UpdateTemplate(ctx.Request().Context(), templateId, body.Name)
+	template, err := h.templateService.UpdateTemplate(ctx.Request().Context(), templateID, body.Name)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrTemplateNotFound):
