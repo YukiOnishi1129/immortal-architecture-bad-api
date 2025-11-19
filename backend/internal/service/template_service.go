@@ -125,8 +125,8 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, ownerID string, na
 	return s.composeTemplateResponse(ctx, template.ID, template.Name, template.OwnerID, template.UpdatedAt, false)
 }
 
-// UpdateTemplate updates template name only (fields handled separately).
-func (s *TemplateService) UpdateTemplate(ctx context.Context, id, name string) (*openapi.ModelsTemplateResponse, error) {
+// UpdateTemplate updates template metadata and reorders fields.
+func (s *TemplateService) UpdateTemplate(ctx context.Context, id, name string, fields []openapi.ModelsUpdateFieldRequest) (*openapi.ModelsTemplateResponse, error) {
 	templateID, err := parseUUID(id)
 	if err != nil {
 		return nil, ErrInvalidTemplateID
@@ -141,6 +141,15 @@ func (s *TemplateService) UpdateTemplate(ctx context.Context, id, name string) (
 			return nil, ErrTemplateNotFound
 		}
 		return nil, err
+	}
+
+	if fields != nil {
+		if len(fields) == 0 {
+			return nil, errors.New("at least one field is required")
+		}
+		if err := s.syncTemplateFields(ctx, templateID, fields); err != nil {
+			return nil, err
+		}
 	}
 
 	isUsed, err := s.queries.CheckTemplateInUse(ctx, templateID)
@@ -169,6 +178,66 @@ func (s *TemplateService) DeleteTemplate(ctx context.Context, id string) error {
 	if err := s.queries.DeleteTemplate(ctx, templateID); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (s *TemplateService) syncTemplateFields(ctx context.Context, templateID pgtype.UUID, fields []openapi.ModelsUpdateFieldRequest) error {
+	existing, err := s.queries.ListFieldsByTemplate(ctx, templateID)
+	if err != nil {
+		return err
+	}
+
+	needsTrim := len(fields) < len(existing)
+	if needsTrim {
+		inUse, err := s.queries.CheckTemplateInUse(ctx, templateID)
+		if err != nil {
+			return err
+		}
+		if inUse {
+			return ErrTemplateInUse
+		}
+	}
+
+	for idx, field := range fields {
+		if idx >= math.MaxInt32 {
+			return errors.New("too many fields")
+		}
+
+		order64 := idx + 1
+		if order64 >= math.MaxInt32 {
+			return errors.New("field order overflow")
+		}
+		order := int32(order64) //nolint:gosec // bounded above by math.MaxInt32
+		if idx < len(existing) {
+			if _, err := s.queries.UpdateField(ctx, &sqldb.UpdateFieldParams{
+				ID:         existing[idx].ID,
+				Label:      field.Label,
+				Order:      order,
+				IsRequired: field.IsRequired,
+			}); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if _, err := s.queries.CreateField(ctx, &sqldb.CreateFieldParams{
+			TemplateID: templateID,
+			Label:      field.Label,
+			Order:      order,
+			IsRequired: field.IsRequired,
+		}); err != nil {
+			return err
+		}
+	}
+
+	if needsTrim {
+		for _, obsolete := range existing[len(fields):] {
+			if err := s.queries.DeleteField(ctx, obsolete.ID); err != nil {
+				return err
+			}
+		}
+	}
+
 	return nil
 }
 

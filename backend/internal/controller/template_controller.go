@@ -125,7 +125,7 @@ func (h *TemplateController) updateTemplate(c echo.Context) error {
 		return respondError(c, http.StatusBadRequest, "name is required", nil)
 	}
 
-	template, err := h.service.UpdateTemplate(c.Request().Context(), templateID, payload.Name)
+	template, err := h.service.UpdateTemplate(c.Request().Context(), templateID, payload.Name, nil)
 	if err != nil {
 		if errors.Is(err, service.ErrTemplateNotFound) {
 			return respondError(c, http.StatusNotFound, "template not found", err)

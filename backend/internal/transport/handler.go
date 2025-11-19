@@ -166,7 +166,9 @@ func (h *Handler) NotesDeleteNote(ctx echo.Context, noteID string) error {
 			return respondError(ctx, http.StatusInternalServerError, "failed to delete note")
 		}
 	}
-	return ctx.NoContent(http.StatusNoContent)
+	return ctx.JSON(http.StatusOK, openapi.ModelsSuccessResponse{
+		Success: true,
+	})
 }
 
 // NotesGetNoteById returns note detail.
@@ -298,7 +300,9 @@ func (h *Handler) TemplatesDeleteTemplate(ctx echo.Context, templateID string) e
 			return respondError(ctx, http.StatusInternalServerError, "failed to delete template")
 		}
 	}
-	return ctx.NoContent(http.StatusNoContent)
+	return ctx.JSON(http.StatusOK, openapi.ModelsSuccessResponse{
+		Success: true,
+	})
 }
 
 // TemplatesGetTemplateById returns template detail.
@@ -327,14 +331,19 @@ func (h *Handler) TemplatesUpdateTemplate(ctx echo.Context, templateID string) e
 	if strings.TrimSpace(body.Name) == "" {
 		return respondError(ctx, http.StatusBadRequest, "name is required")
 	}
+	if len(body.Fields) == 0 {
+		return respondError(ctx, http.StatusBadRequest, "at least one field is required")
+	}
 
-	template, err := h.templateService.UpdateTemplate(ctx.Request().Context(), templateID, body.Name)
+	template, err := h.templateService.UpdateTemplate(ctx.Request().Context(), templateID, body.Name, body.Fields)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrTemplateNotFound):
 			return respondError(ctx, http.StatusNotFound, "template not found")
 		case errors.Is(err, service.ErrInvalidTemplateID):
 			return respondError(ctx, http.StatusBadRequest, "invalid template id")
+		case errors.Is(err, service.ErrTemplateInUse):
+			return respondError(ctx, http.StatusConflict, "template is used by existing notes")
 		default:
 			return respondError(ctx, http.StatusInternalServerError, "failed to update template")
 		}

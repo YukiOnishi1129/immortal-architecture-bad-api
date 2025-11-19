@@ -69,3 +69,7 @@ RETURNING *;
 -- name: DeleteFieldsByTemplate :exec
 DELETE FROM fields
 WHERE template_id = $1;
+
+-- name: DeleteField :exec
+DELETE FROM fields
+WHERE id = $1;
