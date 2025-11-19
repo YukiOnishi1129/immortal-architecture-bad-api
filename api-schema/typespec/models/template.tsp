@@ -44,6 +44,10 @@ model CreateTemplateRequest {
   @maxLength(100)
   name: string;
 
+  /** 所有者ID */
+  @format("uuid")
+  ownerId: string;
+
   /** フィールド一覧 */
   fields: CreateFieldRequest[];
 }

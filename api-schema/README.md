@@ -1,6 +1,6 @@
 # Mini Notion API Schema
 
-TypeSpecを使用したAPI仕様の定義と、GoおよびTypeScriptの型自動生成を行うプロジェクトです。
+TypeSpecを使用したAPI仕様の定義と、TypeScriptの型自動生成を行うプロジェクトです。
 
 ## 概要
 
@@ -8,7 +8,6 @@ TypeSpecを使用したAPI仕様の定義と、GoおよびTypeScriptの型自動
 
 - **TypeSpec**: API仕様を定義
 - **OpenAPI YAML**: TypeSpecから自動生成
-- **Go**: OpenAPIからGoの型とクライアントを自動生成
 - **TypeScript**: OpenAPIからTypeScriptの型とクライアントを自動生成
 
 ## ディレクトリ構成
@@ -32,7 +31,6 @@ api-schema/
 ├── scripts/              # 生成スクリプト
 │   ├── generate.sh
 │   ├── generate-openapi.sh
-│   ├── generate-go.sh
 │   └── generate-ts.sh
 ├── package.json
 └── README.md
@@ -55,7 +53,7 @@ pnpm install
 
 ### 全自動生成
 
-TypeSpecからOpenAPI YAML、Go、TypeScriptのコードを一括生成します。
+TypeSpecからOpenAPI YAMLとTypeScriptのコードを一括生成します。
 
 ```bash
 pnpm run generate
@@ -67,12 +65,6 @@ pnpm run generate
 
 ```bash
 pnpm run generate:openapi
-```
-
-#### Goコードの生成
-
-```bash
-pnpm run generate:go
 ```
 
 #### TypeScriptコードの生成
@@ -120,18 +112,6 @@ pnpm run generate
 ```
 
 ## 生成されたコードの使用
-
-### Go側での使用
-
-```go
-import "github.com/your-org/mini-notion-api/generated/go/models"
-
-func CreateNote(req models.CreateNoteRequest) models.NoteResponse {
-    // ...
-}
-```
-
-### TypeScript側での使用
 
 ```typescript
 import { NoteResponse, CreateNoteRequest } from '@mini-notion/api-schema/typescript/models';

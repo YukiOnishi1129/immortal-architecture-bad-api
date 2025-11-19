@@ -34,6 +34,12 @@ export interface ModelsCreateTemplateRequest {
      */
     name: string;
     /**
+     * 所有者ID
+     * @type {string}
+     * @memberof ModelsCreateTemplateRequest
+     */
+    ownerId: string;
+    /**
      * フィールド一覧
      * @type {Array<ModelsCreateFieldRequest>}
      * @memberof ModelsCreateTemplateRequest
@@ -46,6 +52,7 @@ export interface ModelsCreateTemplateRequest {
  */
 export function instanceOfModelsCreateTemplateRequest(value: object): value is ModelsCreateTemplateRequest {
     if (!('name' in value) || value['name'] === undefined) return false;
+    if (!('ownerId' in value) || value['ownerId'] === undefined) return false;
     if (!('fields' in value) || value['fields'] === undefined) return false;
     return true;
 }
@@ -61,6 +68,7 @@ export function ModelsCreateTemplateRequestFromJSONTyped(json: any, ignoreDiscri
     return {
         
         'name': json['name'],
+        'ownerId': json['ownerId'],
         'fields': ((json['fields'] as Array<any>).map(ModelsCreateFieldRequestFromJSON)),
     };
 }
@@ -77,6 +85,7 @@ export function ModelsCreateTemplateRequestToJSONTyped(value?: ModelsCreateTempl
     return {
         
         'name': value['name'],
+        'ownerId': value['ownerId'],
         'fields': ((value['fields'] as Array<any>).map(ModelsCreateFieldRequestToJSON)),
     };
 }

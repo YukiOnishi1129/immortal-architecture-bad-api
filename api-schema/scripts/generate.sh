@@ -8,10 +8,6 @@ echo "🚀 Starting code generation..."
 echo "📄 Generating OpenAPI YAML..."
 npm run generate:openapi
 
-# Go生成
-echo "🐹 Generating Go code..."
-npm run generate:go
-
 # TypeScript生成
 echo "📘 Generating TypeScript code..."
 npm run generate:ts

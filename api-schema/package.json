@@ -3,9 +3,8 @@
   "version": "1.0.0",
   "description": "TypeSpec-based API schema for Mini Notion",
   "scripts": {
-    "generate": "pnpm run generate:openapi && pnpm run generate:go && pnpm run generate:ts",
+    "generate": "pnpm run generate:openapi && pnpm run generate:ts",
     "generate:openapi": "./scripts/generate-openapi.sh",
-    "generate:go": "./scripts/generate-go.sh",
     "generate:ts": "./scripts/generate-ts.sh"
   },
   "devDependencies": {

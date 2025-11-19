@@ -62,6 +62,10 @@ model CreateNoteRequest {
   @format("uuid")
   templateId: string;
 
+  /** 所有者ID */
+  @format("uuid")
+  ownerId: string;
+
   /** セクション（オプション） */
   sections?: CreateSectionRequest[];
 }

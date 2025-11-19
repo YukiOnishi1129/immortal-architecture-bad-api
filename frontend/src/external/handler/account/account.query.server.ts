@@ -14,21 +14,7 @@ export async function getCurrentAccountQuery() {
     return null;
   }
 
-  // Convert domain entity to response DTO
-  const response = {
-    id: account.id,
-    email: account.email.getValue(),
-    firstName: account.firstName,
-    lastName: account.lastName,
-    fullName: account.fullName,
-    thumbnail: account.thumbnail,
-    lastLoginAt: account.lastLoginAt?.toISOString() ?? null,
-    createdAt: account.createdAt.toISOString(),
-    updatedAt: account.updatedAt.toISOString(),
-  };
-
-  // Validate response with DTO schema
-  return AccountResponseSchema.parse(response);
+  return AccountResponseSchema.parse(account);
 }
 
 export async function getAccountByIdQuery(id: string) {
@@ -38,19 +24,5 @@ export async function getAccountByIdQuery(id: string) {
     return null;
   }
 
-  // Convert domain entity to response DTO
-  const response = {
-    id: account.id,
-    email: account.email.getValue(),
-    firstName: account.firstName,
-    lastName: account.lastName,
-    fullName: account.fullName,
-    thumbnail: account.thumbnail,
-    lastLoginAt: account.lastLoginAt?.toISOString() ?? null,
-    createdAt: account.createdAt.toISOString(),
-    updatedAt: account.updatedAt.toISOString(),
-  };
-
-  // Validate response with DTO schema
-  return AccountResponseSchema.parse(response);
+  return AccountResponseSchema.parse(account);
 }

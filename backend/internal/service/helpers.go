@@ -25,3 +25,25 @@ func parseUUID(value string) (pgtype.UUID, error) {
 	result.Valid = true
 	return result, nil
 }
+
+func uuidToString(id pgtype.UUID) string {
+	if !id.Valid {
+		return ""
+	}
+	u, err := uuid.FromBytes(id.Bytes[:])
+	if err != nil {
+		return ""
+	}
+	return u.String()
+}
+
+func textToPointer(val pgtype.Text) *string {
+	if !val.Valid {
+		return nil
+	}
+	s := strings.TrimSpace(val.String)
+	if s == "" {
+		return nil
+	}
+	return &s
+}

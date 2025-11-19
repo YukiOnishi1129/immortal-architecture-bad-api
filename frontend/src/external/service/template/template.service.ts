@@ -1,114 +1,106 @@
-import { Template } from "../../domain/template/template.entity";
-import type { ITemplateRepository } from "../../domain/template/template.repository.interface";
-import type { ITransactionManager } from "../../domain/transaction/transaction-manager.interface";
-import type {
-  CreateTemplateRequest,
-  UpdateTemplateRequest,
-} from "../../dto/template.dto";
-import { templateRepository } from "../../repository/template.repository";
+import { templatesApiClient } from "@/external/client/api/config";
+import type { TemplatesApi } from "@/external/client/api/generated/apis/TemplatesApi";
+import type { ModelsTemplateResponse } from "@/external/client/api/generated/models/ModelsTemplateResponse";
 import {
-  type DbClient,
-  transactionRepository,
-} from "../../repository/transaction.repository";
+  type CreateTemplateRequest,
+  type TemplateResponse,
+  TemplateResponseSchema,
+  type UpdateTemplateRequest,
+} from "@/external/dto/template.dto";
+import { isNotFoundError } from "../http-error";
+
+function toTemplateResponse(model: ModelsTemplateResponse): TemplateResponse {
+  return TemplateResponseSchema.parse({
+    id: model.id,
+    name: model.name,
+    ownerId: model.ownerId,
+    owner: {
+      id: model.owner.id,
+      firstName: model.owner.firstName,
+      lastName: model.owner.lastName,
+      thumbnail: model.owner.thumbnail ?? null,
+    },
+    fields: model.fields.map((field) => ({
+      id: field.id,
+      label: field.label,
+      order: field.order,
+      isRequired: field.isRequired,
+    })),
+    updatedAt: model.updatedAt.toISOString(),
+    isUsed: model.isUsed,
+  });
+}
 
 export class TemplateService {
-  constructor(
-    private templateRepository: ITemplateRepository,
-    private transactionManager: ITransactionManager<DbClient>,
-  ) {}
+  constructor(private readonly api: TemplatesApi) {}
 
-  async getTemplateById(id: string): Promise<Template | null> {
-    return this.templateRepository.findById(id);
+  async getTemplateById(id: string): Promise<TemplateResponse | null> {
+    try {
+      const template = await this.api.templatesGetTemplateById({
+        templateId: id,
+      });
+      return toTemplateResponse(template);
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   async getTemplates(filters?: {
     ownerId?: string;
     q?: string;
-  }): Promise<Template[]> {
-    // Convert 'q' parameter to 'search' for repository
-    const repoFilters = filters
-      ? {
-          ownerId: filters.ownerId,
-          search: filters.q,
-        }
-      : undefined;
-
-    return this.templateRepository.findAll(repoFilters);
+  }): Promise<TemplateResponse[]> {
+    const templates = await this.api.templatesListTemplates({
+      ownerId: filters?.ownerId,
+      q: filters?.q,
+    });
+    return templates.map((template) => toTemplateResponse(template));
   }
 
   async createTemplate(
     ownerId: string,
     input: CreateTemplateRequest,
-  ): Promise<Template> {
-    return this.transactionManager.execute(async (tx) => {
-      return this.templateRepository.create(
-        {
-          name: input.name,
-          ownerId,
-          fields: input.fields,
-        },
-        tx,
-      );
+  ): Promise<TemplateResponse> {
+    const template = await this.api.templatesCreateTemplate({
+      modelsCreateTemplateRequest: {
+        name: input.name,
+        ownerId,
+        fields: input.fields.map((field) => ({
+          label: field.label,
+          order: field.order,
+          isRequired: field.isRequired,
+        })),
+      },
     });
+    return toTemplateResponse(template);
   }
 
   async updateTemplate(
     id: string,
-    ownerId: string,
+    _ownerId: string,
     input: UpdateTemplateRequest,
-  ): Promise<Template> {
-    return this.transactionManager.execute(async (tx) => {
-      // Check if template exists and belongs to the owner
-      const existing = await this.templateRepository.findById(id, tx);
-      if (!existing) {
-        throw new Error("Template not found");
-      }
-
-      if (existing.ownerId !== ownerId) {
-        throw new Error("Unauthorized");
-      }
-
-      // Update template
-      const updatedTemplate = Template.create({
-        id: existing.id,
+  ): Promise<TemplateResponse> {
+    const template = await this.api.templatesUpdateTemplate({
+      templateId: id,
+      modelsUpdateTemplateRequest: {
+        id,
         name: input.name,
-        ownerId: existing.ownerId,
-        fields: input.fields.map((f) => ({
-          id: f.id || crypto.randomUUID(),
-          label: f.label,
-          order: f.order,
-          isRequired: f.isRequired,
+        fields: input.fields.map((field) => ({
+          id: field.id,
+          label: field.label,
+          order: field.order,
+          isRequired: field.isRequired,
         })),
-        updatedAt: new Date(),
-      });
-
-      await this.templateRepository.save(updatedTemplate, tx);
-      return updatedTemplate;
+      },
     });
+    return toTemplateResponse(template);
   }
 
-  async deleteTemplate(id: string, ownerId: string): Promise<void> {
-    return this.transactionManager.execute(async (tx) => {
-      const template = await this.templateRepository.findById(id, tx);
-      if (!template) {
-        throw new Error("Template not found");
-      }
-
-      if (template.ownerId !== ownerId) {
-        throw new Error("Unauthorized");
-      }
-
-      await this.templateRepository.delete(id, tx);
-    });
-  }
-
-  async getAccountForTemplate(ownerId: string) {
-    return this.templateRepository.getAccountForTemplate(ownerId);
+  async deleteTemplate(id: string): Promise<void> {
+    await this.api.templatesDeleteTemplate({ templateId: id });
   }
 }
 
-// シングルトンインスタンスをエクスポート
-export const templateService = new TemplateService(
-  templateRepository,
-  transactionRepository,
-);
+export const templateService = new TemplateService(templatesApiClient);

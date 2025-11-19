@@ -3,10 +3,13 @@ package service
 import (
 	"context"
 	"errors"
+	"math"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	sqldb "immortal-architecture-bad-api/backend/internal/db/sqlc"
+	openapi "immortal-architecture-bad-api/backend/internal/generated/openapi"
 )
 
 var (
@@ -35,7 +38,7 @@ type TemplateFilters struct {
 }
 
 // ListTemplates returns templates optionally filtered by owner or search query.
-func (s *TemplateService) ListTemplates(ctx context.Context, filters TemplateFilters) ([]*sqldb.ListTemplatesRow, error) {
+func (s *TemplateService) ListTemplates(ctx context.Context, filters TemplateFilters) ([]*openapi.ModelsTemplateResponse, error) {
 	params := &sqldb.ListTemplatesParams{}
 
 	if filters.OwnerID != nil && *filters.OwnerID != "" {
@@ -48,11 +51,25 @@ func (s *TemplateService) ListTemplates(ctx context.Context, filters TemplateFil
 		params.Column2 = *filters.Query
 	}
 
-	return s.queries.ListTemplates(ctx, params)
+	rows, err := s.queries.ListTemplates(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	responses := make([]*openapi.ModelsTemplateResponse, 0, len(rows))
+	for _, tpl := range rows {
+		response, err := s.composeTemplateResponse(ctx, tpl.ID, tpl.Name, tpl.OwnerID, tpl.UpdatedAt, tpl.IsUsed)
+		if err != nil {
+			return nil, err
+		}
+		responses = append(responses, response)
+	}
+
+	return responses, nil
 }
 
 // GetTemplate returns a template by ID along with is_used flag.
-func (s *TemplateService) GetTemplate(ctx context.Context, id string) (*sqldb.GetTemplateByIDRow, error) {
+func (s *TemplateService) GetTemplate(ctx context.Context, id string) (*openapi.ModelsTemplateResponse, error) {
 	pgID, err := parseUUID(id)
 	if err != nil {
 		return nil, ErrInvalidTemplateID
@@ -65,11 +82,11 @@ func (s *TemplateService) GetTemplate(ctx context.Context, id string) (*sqldb.Ge
 		}
 		return nil, err
 	}
-	return template, nil
+	return s.composeTemplateResponse(ctx, template.ID, template.Name, template.OwnerID, template.UpdatedAt, template.IsUsed)
 }
 
 // CreateTemplate creates a template with its fields.
-func (s *TemplateService) CreateTemplate(ctx context.Context, ownerID string, name string, fields []sqldb.Field) (*sqldb.Template, error) {
+func (s *TemplateService) CreateTemplate(ctx context.Context, ownerID string, name string, fields []sqldb.Field) (*openapi.ModelsTemplateResponse, error) {
 	pgOwner, err := parseUUID(ownerID)
 	if err != nil {
 		return nil, ErrInvalidAccountID
@@ -84,10 +101,16 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, ownerID string, na
 	}
 
 	for idx, field := range fields {
-		if idx > 1<<30 {
-			return template, errors.New("too many fields")
+		if idx > math.MaxInt32-1 {
+			return nil, errors.New("too many fields")
 		}
-		order := int32(idx + 1) //nolint:gosec // idx は実クエリで自然数範囲
+		order := field.Order
+		if order == 0 {
+			if idx >= math.MaxInt32 {
+				return nil, errors.New("too many fields")
+			}
+			order = int32(idx + 1) //nolint:gosec // idx is bounded above
+		}
 		_, err = s.queries.CreateField(ctx, &sqldb.CreateFieldParams{
 			TemplateID: template.ID,
 			Label:      field.Label,
@@ -95,15 +118,15 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, ownerID string, na
 			IsRequired: field.IsRequired,
 		})
 		if err != nil {
-			return template, err
+			return nil, err
 		}
 	}
 
-	return template, nil
+	return s.composeTemplateResponse(ctx, template.ID, template.Name, template.OwnerID, template.UpdatedAt, false)
 }
 
-// UpdateTemplate updates template name only (fields handled separately).
-func (s *TemplateService) UpdateTemplate(ctx context.Context, id, name string) (*sqldb.Template, error) {
+// UpdateTemplate updates template metadata and reorders fields.
+func (s *TemplateService) UpdateTemplate(ctx context.Context, id, name string, fields []openapi.ModelsUpdateFieldRequest) (*openapi.ModelsTemplateResponse, error) {
 	templateID, err := parseUUID(id)
 	if err != nil {
 		return nil, ErrInvalidTemplateID
@@ -120,7 +143,21 @@ func (s *TemplateService) UpdateTemplate(ctx context.Context, id, name string) (
 		return nil, err
 	}
 
-	return template, nil
+	if fields != nil {
+		if len(fields) == 0 {
+			return nil, errors.New("at least one field is required")
+		}
+		if err := s.syncTemplateFields(ctx, templateID, fields); err != nil {
+			return nil, err
+		}
+	}
+
+	isUsed, err := s.queries.CheckTemplateInUse(ctx, templateID)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.composeTemplateResponse(ctx, template.ID, template.Name, template.OwnerID, template.UpdatedAt, isUsed)
 }
 
 // DeleteTemplate removes template if not in use.
@@ -142,4 +179,106 @@ func (s *TemplateService) DeleteTemplate(ctx context.Context, id string) error {
 		return err
 	}
 	return nil
+}
+
+func (s *TemplateService) syncTemplateFields(ctx context.Context, templateID pgtype.UUID, fields []openapi.ModelsUpdateFieldRequest) error {
+	existing, err := s.queries.ListFieldsByTemplate(ctx, templateID)
+	if err != nil {
+		return err
+	}
+
+	needsTrim := len(fields) < len(existing)
+	if needsTrim {
+		inUse, err := s.queries.CheckTemplateInUse(ctx, templateID)
+		if err != nil {
+			return err
+		}
+		if inUse {
+			return ErrTemplateInUse
+		}
+	}
+
+	for idx, field := range fields {
+		if idx >= math.MaxInt32 {
+			return errors.New("too many fields")
+		}
+
+		order64 := idx + 1
+		if order64 >= math.MaxInt32 {
+			return errors.New("field order overflow")
+		}
+		order := int32(order64) //nolint:gosec // bounded above by math.MaxInt32
+		if idx < len(existing) {
+			if _, err := s.queries.UpdateField(ctx, &sqldb.UpdateFieldParams{
+				ID:         existing[idx].ID,
+				Label:      field.Label,
+				Order:      order,
+				IsRequired: field.IsRequired,
+			}); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if _, err := s.queries.CreateField(ctx, &sqldb.CreateFieldParams{
+			TemplateID: templateID,
+			Label:      field.Label,
+			Order:      order,
+			IsRequired: field.IsRequired,
+		}); err != nil {
+			return err
+		}
+	}
+
+	if needsTrim {
+		for _, obsolete := range existing[len(fields):] {
+			if err := s.queries.DeleteField(ctx, obsolete.ID); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (s *TemplateService) composeTemplateResponse(ctx context.Context, templateID pgtype.UUID, name string, ownerID pgtype.UUID, updatedAt pgtype.Timestamptz, isUsed bool) (*openapi.ModelsTemplateResponse, error) {
+	owner, err := s.queries.GetAccountByID(ctx, ownerID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrAccountNotFound
+		}
+		return nil, err
+	}
+
+	fieldRows, err := s.queries.ListFieldsByTemplate(ctx, templateID)
+	if err != nil {
+		return nil, err
+	}
+
+	fields := make([]openapi.ModelsField, 0, len(fieldRows))
+	for _, field := range fieldRows {
+		fields = append(fields, openapi.ModelsField{
+			Id:         uuidToString(field.ID),
+			Label:      field.Label,
+			Order:      field.Order,
+			IsRequired: field.IsRequired,
+		})
+	}
+
+	response := &openapi.ModelsTemplateResponse{
+		Id:      uuidToString(templateID),
+		Name:    name,
+		OwnerId: uuidToString(ownerID),
+		Owner: openapi.ModelsAccountSummary{
+			Id:        uuidToString(owner.ID),
+			FirstName: owner.FirstName,
+			LastName:  owner.LastName,
+			Thumbnail: textToPointer(owner.Thumbnail),
+		},
+		Fields:    fields,
+		UpdatedAt: updatedAt.Time,
+		IsUsed:    isUsed,
+	}
+
+	return response, nil
 }

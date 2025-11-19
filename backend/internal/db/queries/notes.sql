@@ -7,10 +7,10 @@ SELECT
 FROM notes n
 JOIN templates t ON t.id = n.template_id
 JOIN accounts a ON a.id = n.owner_id
-WHERE ($1::text IS NULL OR n.status = $1)
+WHERE (NULLIF($1::text, '') IS NULL OR n.status = $1)
   AND ($2::uuid IS NULL OR n.template_id = $2)
   AND ($3::uuid IS NULL OR n.owner_id = $3)
-  AND ($4::text IS NULL OR n.title ILIKE '%' || $4 || '%')
+  AND (NULLIF($4::text, '') IS NULL OR n.title ILIKE '%' || $4 || '%')
 ORDER BY n.updated_at DESC;
 
 -- name: GetNoteByID :one

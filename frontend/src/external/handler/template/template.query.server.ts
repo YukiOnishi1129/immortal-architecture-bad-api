@@ -10,7 +10,6 @@ import {
   TemplateDetailResponseSchema,
   TemplateResponseSchema,
 } from "../../dto/template.dto";
-import { templateRepository } from "../../repository/template.repository";
 import { templateService } from "../../service/template/template.service";
 
 export async function getTemplateByIdQuery(id: string) {
@@ -20,39 +19,7 @@ export async function getTemplateByIdQuery(id: string) {
     return null;
   }
 
-  // Check if template is used by notes and get owner info
-  const [isUsed, owner] = await Promise.all([
-    templateRepository.isUsedByNotes(id),
-    templateService.getAccountForTemplate(template.ownerId),
-  ]);
-
-  if (!owner) {
-    throw new Error("Owner not found");
-  }
-
-  // Convert domain entity to response DTO with owner info
-  const response = {
-    id: template.id,
-    name: template.name,
-    ownerId: template.ownerId,
-    owner: {
-      id: owner.id,
-      firstName: owner.firstName,
-      lastName: owner.lastName,
-      thumbnail: owner.thumbnail,
-    },
-    fields: template.fields.map((field) => ({
-      id: field.id,
-      label: field.label,
-      order: field.order,
-      isRequired: field.isRequired,
-    })),
-    updatedAt: template.updatedAt.toISOString(),
-    isUsed,
-  };
-
-  // Validate response with DTO schema
-  return TemplateDetailResponseSchema.parse(response);
+  return TemplateDetailResponseSchema.parse(template);
 }
 
 export async function listTemplatesQuery(filters?: TemplateFilters) {
@@ -61,49 +28,17 @@ export async function listTemplatesQuery(filters?: TemplateFilters) {
   // Get current user for onlyMyTemplates filter
   const session = await getSessionServer();
 
-  // If onlyMyTemplates is true, add the current user's ID as ownerId filter
-  const adjustedFilters =
+  const ownerFilter =
     filters?.onlyMyTemplates && session?.account.id
-      ? { ...filters, ownerId: session.account.id }
-      : filters;
+      ? session.account.id
+      : filters?.ownerId;
 
-  // Pass filters to service
-  const templates = await templateService.getTemplates(adjustedFilters);
+  const templates = await templateService.getTemplates({
+    ownerId: ownerFilter,
+    q: filters?.q,
+  });
 
-  // Convert domain entities to response DTOs with isUsed status and owner info
-  return Promise.all(
-    templates.map(async (template) => {
-      const [isUsed, owner] = await Promise.all([
-        templateRepository.isUsedByNotes(template.id),
-        templateService.getAccountForTemplate(template.ownerId),
-      ]);
-
-      if (!owner) {
-        throw new Error("Owner not found");
-      }
-
-      const response = {
-        id: template.id,
-        name: template.name,
-        ownerId: template.ownerId,
-        owner: {
-          id: owner.id,
-          firstName: owner.firstName,
-          lastName: owner.lastName,
-          thumbnail: owner.thumbnail,
-        },
-        fields: template.fields.map((field) => ({
-          id: field.id,
-          label: field.label,
-          order: field.order,
-          isRequired: field.isRequired,
-        })),
-        updatedAt: template.updatedAt.toISOString(),
-        isUsed,
-      };
-      return TemplateResponseSchema.parse(response);
-    }),
-  );
+  return templates.map((template) => TemplateResponseSchema.parse(template));
 }
 
 export async function listMyTemplatesQuery() {
@@ -113,38 +48,5 @@ export async function listMyTemplatesQuery() {
     ownerId: session.account.id,
   });
 
-  // Convert domain entities to response DTOs with isUsed status and owner info
-  return Promise.all(
-    templates.map(async (template) => {
-      const [isUsed, owner] = await Promise.all([
-        templateRepository.isUsedByNotes(template.id),
-        templateService.getAccountForTemplate(template.ownerId),
-      ]);
-
-      if (!owner) {
-        throw new Error("Owner not found");
-      }
-
-      const response = {
-        id: template.id,
-        name: template.name,
-        ownerId: template.ownerId,
-        owner: {
-          id: owner.id,
-          firstName: owner.firstName,
-          lastName: owner.lastName,
-          thumbnail: owner.thumbnail,
-        },
-        fields: template.fields.map((field) => ({
-          id: field.id,
-          label: field.label,
-          order: field.order,
-          isRequired: field.isRequired,
-        })),
-        updatedAt: template.updatedAt.toISOString(),
-        isUsed,
-      };
-      return TemplateResponseSchema.parse(response);
-    }),
-  );
+  return templates.map((template) => TemplateResponseSchema.parse(template));
 }

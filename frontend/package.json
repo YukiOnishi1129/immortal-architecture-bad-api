@@ -10,6 +10,7 @@
     "lint:fix": "biome check --fix --unsafe",
     "format": "biome format --write",
     "typegen": "next typegen",
+    "openapi": "bash ./scripts/generate-openapi.sh",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:migrate": "tsx src/external/client/database/migrate.ts",

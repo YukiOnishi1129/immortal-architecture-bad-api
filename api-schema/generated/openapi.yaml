@@ -617,6 +617,7 @@ components:
       required:
         - title
         - templateId
+        - ownerId
       properties:
         title:
           type: string
@@ -627,6 +628,10 @@ components:
           type: string
           format: uuid
           description: テンプレートID
+        ownerId:
+          type: string
+          format: uuid
+          description: 所有者ID
         sections:
           type: array
           items:
@@ -674,6 +679,7 @@ components:
       type: object
       required:
         - name
+        - ownerId
         - fields
       properties:
         name:
@@ -681,6 +687,10 @@ components:
           minLength: 1
           maxLength: 100
           description: テンプレート名
+        ownerId:
+          type: string
+          format: uuid
+          description: 所有者ID
         fields:
           type: array
           items:
