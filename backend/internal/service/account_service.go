@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	sqldb "immortal-architecture-bad-api/backend/internal/db/sqlc"
 )
@@ -22,12 +23,16 @@ var (
 
 // AccountService bundles all account-related operations.
 type AccountService struct {
+	pool    *pgxpool.Pool
 	queries *sqldb.Queries
 }
 
 // NewAccountService creates a new service instance.
-func NewAccountService(queries *sqldb.Queries) *AccountService {
-	return &AccountService{queries: queries}
+func NewAccountService(pool *pgxpool.Pool) *AccountService {
+	return &AccountService{
+		pool:    pool,
+		queries: sqldb.New(pool),
+	}
 }
 
 // CreateOrGetAccountInput represents the payload required to fetch or create an account.
@@ -59,7 +64,27 @@ func (s *AccountService) CreateOrGetAccount(ctx context.Context, input CreateOrG
 		params.Thumbnail = pgtype.Text{String: strings.TrimSpace(*input.Thumbnail), Valid: true}
 	}
 
-	return s.queries.UpsertAccount(ctx, params)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	queries := s.queries.WithTx(tx)
+	account, err := queries.UpsertAccount(ctx, params)
+	if err != nil {
+		if rbErr := tx.Rollback(ctx); rbErr != nil {
+			return nil, rbErr
+		}
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		if rbErr := tx.Rollback(ctx); rbErr != nil {
+			return nil, rbErr
+		}
+		return nil, err
+	}
+
+	return account, nil
 }
 
 // GetAccountByID fetches an account using its UUID string.

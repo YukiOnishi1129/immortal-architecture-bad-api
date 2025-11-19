@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	sqldb "immortal-architecture-bad-api/backend/internal/db/sqlc"
 	openapi "immortal-architecture-bad-api/backend/internal/generated/openapi"
@@ -21,12 +22,16 @@ var (
 
 // NoteService bundles note logic.
 type NoteService struct {
+	pool    *pgxpool.Pool
 	queries *sqldb.Queries
 }
 
 // NewNoteService creates service.
-func NewNoteService(q *sqldb.Queries) *NoteService {
-	return &NoteService{queries: q}
+func NewNoteService(pool *pgxpool.Pool) *NoteService {
+	return &NoteService{
+		pool:    pool,
+		queries: sqldb.New(pool),
+	}
 }
 
 // NoteFilters for listing notes.
@@ -121,28 +126,50 @@ func (s *NoteService) CreateNote(ctx context.Context, ownerID, templateID, title
 		return nil, ErrInvalidTemplateID
 	}
 
-	note, err := s.queries.CreateNote(ctx, &sqldb.CreateNoteParams{
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	txQueries := s.queries.WithTx(tx)
+
+	note, err := txQueries.CreateNote(ctx, &sqldb.CreateNoteParams{
 		Title:      strings.TrimSpace(title),
 		TemplateID: templateUUID,
 		OwnerID:    ownerUUID,
 		Status:     "Draft",
 	})
 	if err != nil {
+		if rbErr := tx.Rollback(ctx); rbErr != nil {
+			return nil, rbErr
+		}
 		return nil, err
 	}
 
 	for fieldID, content := range sections {
 		fid, parseErr := parseUUID(fieldID)
 		if parseErr != nil {
+			if rbErr := tx.Rollback(ctx); rbErr != nil {
+				return nil, rbErr
+			}
 			return nil, parseErr
 		}
-		if _, err = s.queries.CreateSection(ctx, &sqldb.CreateSectionParams{
+		if _, err = txQueries.CreateSection(ctx, &sqldb.CreateSectionParams{
 			NoteID:  note.ID,
 			FieldID: fid,
 			Content: content,
 		}); err != nil {
+			if rbErr := tx.Rollback(ctx); rbErr != nil {
+				return nil, rbErr
+			}
 			return nil, err
 		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		if rbErr := tx.Rollback(ctx); rbErr != nil {
+			return nil, rbErr
+		}
+		return nil, err
 	}
 
 	return s.composeNoteResponse(ctx, noteResponseInput{
@@ -163,11 +190,20 @@ func (s *NoteService) UpdateNote(ctx context.Context, id, title string, sections
 		return nil, ErrInvalidNoteID
 	}
 
-	note, err := s.queries.UpdateNote(ctx, &sqldb.UpdateNoteParams{
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	txQueries := s.queries.WithTx(tx)
+
+	note, err := txQueries.UpdateNote(ctx, &sqldb.UpdateNoteParams{
 		ID:    noteID,
 		Title: strings.TrimSpace(title),
 	})
 	if err != nil {
+		if rbErr := tx.Rollback(ctx); rbErr != nil {
+			return nil, rbErr
+		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNoteNotFound
 		}
@@ -177,14 +213,27 @@ func (s *NoteService) UpdateNote(ctx context.Context, id, title string, sections
 	for sectionID, content := range sections {
 		secUUID, parseErr := parseUUID(sectionID)
 		if parseErr != nil {
+			if rbErr := tx.Rollback(ctx); rbErr != nil {
+				return nil, rbErr
+			}
 			return nil, parseErr
 		}
-		if _, err := s.queries.UpdateSectionContent(ctx, &sqldb.UpdateSectionContentParams{
+		if _, err := txQueries.UpdateSectionContent(ctx, &sqldb.UpdateSectionContentParams{
 			ID:      secUUID,
 			Content: content,
 		}); err != nil {
+			if rbErr := tx.Rollback(ctx); rbErr != nil {
+				return nil, rbErr
+			}
 			return nil, err
 		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		if rbErr := tx.Rollback(ctx); rbErr != nil {
+			return nil, rbErr
+		}
+		return nil, err
 	}
 
 	return s.composeNoteResponse(ctx, noteResponseInput{
@@ -209,13 +258,28 @@ func (s *NoteService) ChangeStatus(ctx context.Context, id, status string) (*ope
 		return nil, errors.New("invalid status")
 	}
 
-	note, err := s.queries.UpdateNoteStatus(ctx, &sqldb.UpdateNoteStatusParams{
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	txQueries := s.queries.WithTx(tx)
+
+	note, err := txQueries.UpdateNoteStatus(ctx, &sqldb.UpdateNoteStatusParams{
 		ID:     noteID,
 		Status: status,
 	})
 	if err != nil {
+		if rbErr := tx.Rollback(ctx); rbErr != nil {
+			return nil, rbErr
+		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNoteNotFound
+		}
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		if rbErr := tx.Rollback(ctx); rbErr != nil {
+			return nil, rbErr
 		}
 		return nil, err
 	}

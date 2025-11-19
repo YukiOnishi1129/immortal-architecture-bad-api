@@ -1,4 +1,3 @@
-// Package controller exposes HTTP handlers for Echo.
 package controller
 
 import (
@@ -8,157 +7,147 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	openapi "immortal-architecture-bad-api/backend/internal/generated/openapi"
 	"immortal-architecture-bad-api/backend/internal/service"
 )
 
-// NoteController handles note APIs.
-type NoteController struct {
-	service *service.NoteService
-}
-
-// NewNoteController creates controller.
-func NewNoteController(service *service.NoteService) *NoteController {
-	return &NoteController{service: service}
-}
-
-// Register routes for /api/notes.
-func (h *NoteController) Register(router *echo.Group) {
-	router.GET("", h.listNotes)
-	router.POST("", h.createNote)
-	router.GET("/:noteId", h.getNote)
-	router.PUT("/:noteId", h.updateNote)
-	router.POST("/:noteId/publish", h.publishNote)
-	router.POST("/:noteId/unpublish", h.unpublishNote)
-	router.DELETE("/:noteId", h.deleteNote)
-}
-
-func (h *NoteController) listNotes(c echo.Context) error {
-	status := c.QueryParam("status")
-	templateID := c.QueryParam("templateId")
-	ownerID := c.QueryParam("ownerId")
-	q := c.QueryParam("q")
-
+// NotesListNotes returns note list.
+func (c *Controller) NotesListNotes(ctx echo.Context, params openapi.NotesListNotesParams) error {
 	filters := service.NoteFilters{}
-	if status != "" {
+	if params.Q != nil {
+		filters.Query = params.Q
+	}
+	if params.OwnerId != nil {
+		filters.OwnerID = params.OwnerId
+	}
+	if params.TemplateId != nil {
+		filters.TemplateID = params.TemplateId
+	}
+	if params.Status != nil {
+		status := string(*params.Status)
 		filters.Status = &status
 	}
-	if templateID != "" {
-		filters.TemplateID = &templateID
-	}
-	if ownerID != "" {
-		filters.OwnerID = &ownerID
-	}
-	if q != "" {
-		filters.Query = &q
-	}
 
-	notes, err := h.service.ListNotes(c.Request().Context(), filters)
+	notes, err := c.noteService.ListNotes(ctx.Request().Context(), filters)
 	if err != nil {
-		return respondError(c, http.StatusInternalServerError, "failed to list notes", err)
+		return respondError(ctx, http.StatusInternalServerError, "failed to list notes")
 	}
-	return c.JSON(http.StatusOK, notes)
+	return ctx.JSON(http.StatusOK, notes)
 }
 
-func (h *NoteController) getNote(c echo.Context) error {
-	noteID := c.Param("noteId")
-	note, err := h.service.GetNote(c.Request().Context(), noteID)
+// NotesCreateNote creates note.
+func (c *Controller) NotesCreateNote(ctx echo.Context) error {
+	var body openapi.NotesCreateNoteJSONRequestBody
+	if err := ctx.Bind(&body); err != nil {
+		return respondError(ctx, http.StatusBadRequest, "invalid payload")
+	}
+
+	sections := map[string]string{}
+	if body.Sections != nil {
+		for _, section := range *body.Sections {
+			sections[section.FieldId] = section.Content
+		}
+	}
+
+	note, err := c.noteService.CreateNote(
+		ctx.Request().Context(),
+		body.OwnerId.String(),
+		body.TemplateId.String(),
+		body.Title,
+		sections,
+	)
 	if err != nil {
-		if errors.Is(err, service.ErrNoteNotFound) {
-			return respondError(c, http.StatusNotFound, "note not found", err)
+		switch {
+		case errors.Is(err, service.ErrInvalidAccountID), errors.Is(err, service.ErrInvalidTemplateID):
+			return respondError(ctx, http.StatusBadRequest, err.Error())
+		default:
+			return respondError(ctx, http.StatusInternalServerError, "failed to create note")
 		}
-		if errors.Is(err, service.ErrInvalidNoteID) {
-			return respondError(c, http.StatusBadRequest, "invalid note id", err)
-		}
-		return respondError(c, http.StatusInternalServerError, "failed to fetch note", err)
 	}
-	return c.JSON(http.StatusOK, note)
+	return ctx.JSON(http.StatusCreated, note)
 }
 
-func (h *NoteController) createNote(c echo.Context) error {
-	var payload struct {
-		Title      string            `json:"title"`
-		TemplateID string            `json:"templateId"`
-		OwnerID    string            `json:"ownerId"`
-		Sections   map[string]string `json:"sections"`
+// NotesDeleteNote deletes note.
+func (c *Controller) NotesDeleteNote(ctx echo.Context, noteID string) error {
+	if err := c.noteService.DeleteNote(ctx.Request().Context(), noteID); err != nil {
+		switch {
+		case errors.Is(err, service.ErrNoteNotFound):
+			return respondError(ctx, http.StatusNotFound, "note not found")
+		case errors.Is(err, service.ErrInvalidNoteID):
+			return respondError(ctx, http.StatusBadRequest, "invalid note id")
+		default:
+			return respondError(ctx, http.StatusInternalServerError, "failed to delete note")
+		}
 	}
-	if err := c.Bind(&payload); err != nil {
-		return respondError(c, http.StatusBadRequest, "invalid payload", err)
-	}
-	if strings.TrimSpace(payload.Title) == "" {
-		return respondError(c, http.StatusBadRequest, "title is required", nil)
-	}
-	if strings.TrimSpace(payload.TemplateID) == "" || strings.TrimSpace(payload.OwnerID) == "" {
-		return respondError(c, http.StatusBadRequest, "templateId and ownerId are required", nil)
-	}
+	return ctx.JSON(http.StatusOK, openapi.ModelsSuccessResponse{Success: true})
+}
 
-	note, err := h.service.CreateNote(c.Request().Context(), payload.OwnerID, payload.TemplateID, payload.Title, payload.Sections)
+// NotesGetNoteById returns note detail.
+// revive:disable-next-line:var-naming // Method name fixed by generated interface.
+func (c *Controller) NotesGetNoteById(ctx echo.Context, noteID string) error {
+	note, err := c.noteService.GetNote(ctx.Request().Context(), noteID)
 	if err != nil {
-		return respondError(c, http.StatusInternalServerError, "failed to create note", err)
+		switch {
+		case errors.Is(err, service.ErrNoteNotFound):
+			return respondError(ctx, http.StatusNotFound, "note not found")
+		case errors.Is(err, service.ErrInvalidNoteID):
+			return respondError(ctx, http.StatusBadRequest, "invalid note id")
+		default:
+			return respondError(ctx, http.StatusInternalServerError, "failed to fetch note")
+		}
 	}
-	return c.JSON(http.StatusCreated, note)
+	return ctx.JSON(http.StatusOK, note)
 }
 
-func (h *NoteController) updateNote(c echo.Context) error {
-	noteID := c.Param("noteId")
+// NotesUpdateNote updates note.
+func (c *Controller) NotesUpdateNote(ctx echo.Context, noteID string) error {
+	var body openapi.NotesUpdateNoteJSONRequestBody
+	if err := ctx.Bind(&body); err != nil {
+		return respondError(ctx, http.StatusBadRequest, "invalid payload")
+	}
+	if strings.TrimSpace(body.Title) == "" {
+		return respondError(ctx, http.StatusBadRequest, "title is required")
+	}
+	sections := make(map[string]string, len(body.Sections))
+	for _, section := range body.Sections {
+		sections[section.Id] = section.Content
+	}
 
-	var payload struct {
-		Title    string            `json:"title"`
-		Sections map[string]string `json:"sections"`
-	}
-	if err := c.Bind(&payload); err != nil {
-		return respondError(c, http.StatusBadRequest, "invalid payload", err)
-	}
-	if strings.TrimSpace(payload.Title) == "" {
-		return respondError(c, http.StatusBadRequest, "title is required", nil)
-	}
-
-	note, err := h.service.UpdateNote(c.Request().Context(), noteID, payload.Title, payload.Sections)
+	note, err := c.noteService.UpdateNote(ctx.Request().Context(), noteID, body.Title, sections)
 	if err != nil {
-		if errors.Is(err, service.ErrNoteNotFound) {
-			return respondError(c, http.StatusNotFound, "note not found", err)
+		switch {
+		case errors.Is(err, service.ErrNoteNotFound):
+			return respondError(ctx, http.StatusNotFound, "note not found")
+		case errors.Is(err, service.ErrInvalidNoteID):
+			return respondError(ctx, http.StatusBadRequest, "invalid note id")
+		default:
+			return respondError(ctx, http.StatusInternalServerError, "failed to update note")
 		}
-		if errors.Is(err, service.ErrInvalidNoteID) {
-			return respondError(c, http.StatusBadRequest, "invalid note id", err)
-		}
-		return respondError(c, http.StatusInternalServerError, "failed to update note", err)
 	}
-
-	return c.JSON(http.StatusOK, note)
+	return ctx.JSON(http.StatusOK, note)
 }
 
-func (h *NoteController) publishNote(c echo.Context) error {
-	return h.changeStatus(c, "Publish")
+// NotesPublishNote publishes note.
+func (c *Controller) NotesPublishNote(ctx echo.Context, noteID string) error {
+	return c.changeNoteStatus(ctx, noteID, "Publish")
 }
 
-func (h *NoteController) unpublishNote(c echo.Context) error {
-	return h.changeStatus(c, "Draft")
+// NotesUnpublishNote unpublishes note.
+func (c *Controller) NotesUnpublishNote(ctx echo.Context, noteID string) error {
+	return c.changeNoteStatus(ctx, noteID, "Draft")
 }
 
-func (h *NoteController) changeStatus(c echo.Context, status string) error {
-	noteID := c.Param("noteId")
-	note, err := h.service.ChangeStatus(c.Request().Context(), noteID, status)
+func (c *Controller) changeNoteStatus(ctx echo.Context, noteID, status string) error {
+	note, err := c.noteService.ChangeStatus(ctx.Request().Context(), noteID, status)
 	if err != nil {
-		if errors.Is(err, service.ErrNoteNotFound) {
-			return respondError(c, http.StatusNotFound, "note not found", err)
+		switch {
+		case errors.Is(err, service.ErrNoteNotFound):
+			return respondError(ctx, http.StatusNotFound, "note not found")
+		case errors.Is(err, service.ErrInvalidNoteID):
+			return respondError(ctx, http.StatusBadRequest, "invalid note id")
+		default:
+			return respondError(ctx, http.StatusInternalServerError, "failed to change status")
 		}
-		if errors.Is(err, service.ErrInvalidNoteID) {
-			return respondError(c, http.StatusBadRequest, "invalid note id", err)
-		}
-		return respondError(c, http.StatusInternalServerError, "failed to change status", err)
 	}
-	return c.JSON(http.StatusOK, note)
-}
-
-func (h *NoteController) deleteNote(c echo.Context) error {
-	noteID := c.Param("noteId")
-	if err := h.service.DeleteNote(c.Request().Context(), noteID); err != nil {
-		if errors.Is(err, service.ErrNoteNotFound) {
-			return respondError(c, http.StatusNotFound, "note not found", err)
-		}
-		if errors.Is(err, service.ErrInvalidNoteID) {
-			return respondError(c, http.StatusBadRequest, "invalid note id", err)
-		}
-		return respondError(c, http.StatusInternalServerError, "failed to delete note", err)
-	}
-	return c.NoContent(http.StatusNoContent)
+	return ctx.JSON(http.StatusOK, note)
 }
