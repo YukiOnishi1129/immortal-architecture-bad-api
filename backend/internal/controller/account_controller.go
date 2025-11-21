@@ -18,7 +18,7 @@ func (c *Controller) AccountsCreateOrGetAccount(ctx echo.Context) error {
 		return respondError(ctx, http.StatusBadRequest, "invalid payload")
 	}
 
-	account, err := c.accountService.CreateOrGetAccount(ctx.Request().Context(), service.CreateOrGetAccountInput{
+	account, err := c.accountService.CreateOrGetAccount(ctx, service.CreateOrGetAccountInput{
 		Email:             body.Email,
 		FullName:          body.Name,
 		Provider:          body.Provider,
@@ -41,7 +41,7 @@ func (c *Controller) AccountsGetCurrentAccount(ctx echo.Context) error {
 		return respondError(ctx, http.StatusUnauthorized, "missing X-Account-ID header")
 	}
 
-	account, err := c.accountService.GetAccountByID(ctx.Request().Context(), accountID)
+	account, err := c.accountService.GetAccountByID(ctx, accountID)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrAccountNotFound):
@@ -61,7 +61,7 @@ func (c *Controller) AccountsGetAccountById(ctx echo.Context, accountID string) 
 	if strings.TrimSpace(accountID) == "" {
 		return respondError(ctx, http.StatusBadRequest, "account id is required")
 	}
-	account, err := c.accountService.GetAccountByID(ctx.Request().Context(), accountID)
+	account, err := c.accountService.GetAccountByID(ctx, accountID)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrAccountNotFound):

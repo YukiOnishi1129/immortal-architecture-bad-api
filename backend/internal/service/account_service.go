@@ -2,7 +2,6 @@
 package service
 
 import (
-	"context"
 	"errors"
 	"strings"
 	"time"
@@ -10,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/labstack/echo/v4"
 
 	sqldb "immortal-architecture-bad-api/backend/internal/db/sqlc"
 )
@@ -45,7 +45,7 @@ type CreateOrGetAccountInput struct {
 }
 
 // CreateOrGetAccount upserts an account based on OAuth payload.
-func (s *AccountService) CreateOrGetAccount(ctx context.Context, input CreateOrGetAccountInput) (*sqldb.Account, error) {
+func (s *AccountService) CreateOrGetAccount(ctx echo.Context, input CreateOrGetAccountInput) (*sqldb.Account, error) {
 	firstName, lastName := splitName(input.FullName)
 
 	params := &sqldb.UpsertAccountParams{
@@ -64,21 +64,21 @@ func (s *AccountService) CreateOrGetAccount(ctx context.Context, input CreateOrG
 		params.Thumbnail = pgtype.Text{String: strings.TrimSpace(*input.Thumbnail), Valid: true}
 	}
 
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.pool.Begin(ctx.Request().Context())
 	if err != nil {
 		return nil, err
 	}
 
 	queries := s.queries.WithTx(tx)
-	account, err := queries.UpsertAccount(ctx, params)
+	account, err := queries.UpsertAccount(ctx.Request().Context(), params)
 	if err != nil {
-		if rbErr := tx.Rollback(ctx); rbErr != nil {
+		if rbErr := tx.Rollback(ctx.Request().Context()); rbErr != nil {
 			return nil, rbErr
 		}
 		return nil, err
 	}
-	if err := tx.Commit(ctx); err != nil {
-		if rbErr := tx.Rollback(ctx); rbErr != nil {
+	if err := tx.Commit(ctx.Request().Context()); err != nil {
+		if rbErr := tx.Rollback(ctx.Request().Context()); rbErr != nil {
 			return nil, rbErr
 		}
 		return nil, err
@@ -88,13 +88,13 @@ func (s *AccountService) CreateOrGetAccount(ctx context.Context, input CreateOrG
 }
 
 // GetAccountByID fetches an account using its UUID string.
-func (s *AccountService) GetAccountByID(ctx context.Context, id string) (*sqldb.Account, error) {
+func (s *AccountService) GetAccountByID(ctx echo.Context, id string) (*sqldb.Account, error) {
 	pgID, err := parseUUID(id)
 	if err != nil {
 		return nil, ErrInvalidAccountID
 	}
 
-	account, err := s.queries.GetAccountByID(ctx, pgID)
+	account, err := s.queries.GetAccountByID(ctx.Request().Context(), pgID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrAccountNotFound

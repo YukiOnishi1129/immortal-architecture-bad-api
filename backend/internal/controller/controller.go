@@ -7,9 +7,9 @@ import (
 
 // Controller wires OpenAPI-generated routes to the bloated domain controllers.
 type Controller struct {
-	accountService  *service.AccountService
-	templateService *service.TemplateService
-	noteService     *service.NoteService
+	accountService  service.AccountServicer
+	templateService service.TemplateServicer
+	noteService     service.NoteServicer
 }
 
 var _ openapi.ServerInterface = (*Controller)(nil)

@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/labstack/echo/v4"
 
 	sqldb "immortal-architecture-bad-api/backend/internal/db/sqlc"
 	openapi "immortal-architecture-bad-api/backend/internal/generated/openapi"
@@ -43,7 +44,8 @@ type NoteFilters struct {
 }
 
 // ListNotes returns note list with filters.
-func (s *NoteService) ListNotes(ctx context.Context, filters NoteFilters) ([]*openapi.ModelsNoteResponse, error) {
+func (s *NoteService) ListNotes(ctx echo.Context, filters NoteFilters) ([]*openapi.ModelsNoteResponse, error) {
+	dbCtx := ctx.Request().Context()
 	params := &sqldb.ListNotesParams{}
 
 	if filters.Status != nil && *filters.Status != "" {
@@ -63,14 +65,14 @@ func (s *NoteService) ListNotes(ctx context.Context, filters NoteFilters) ([]*op
 		params.Column4 = *filters.Query
 	}
 
-	rows, err := s.queries.ListNotes(ctx, params)
+	rows, err := s.queries.ListNotes(dbCtx, params)
 	if err != nil {
 		return nil, err
 	}
 
 	result := make([]*openapi.ModelsNoteResponse, 0, len(rows))
 	for _, row := range rows {
-		res, err := s.composeNoteResponse(ctx, noteResponseInput{
+		res, err := s.composeNoteResponse(dbCtx, noteResponseInput{
 			ID:           row.ID,
 			Title:        row.Title,
 			TemplateID:   row.TemplateID,
@@ -89,13 +91,13 @@ func (s *NoteService) ListNotes(ctx context.Context, filters NoteFilters) ([]*op
 }
 
 // GetNote returns a note by ID.
-func (s *NoteService) GetNote(ctx context.Context, id string) (*openapi.ModelsNoteResponse, error) {
+func (s *NoteService) GetNote(ctx echo.Context, id string) (*openapi.ModelsNoteResponse, error) {
 	noteID, err := parseUUID(id)
 	if err != nil {
 		return nil, ErrInvalidNoteID
 	}
 
-	note, err := s.queries.GetNoteByID(ctx, noteID)
+	note, err := s.queries.GetNoteByID(ctx.Request().Context(), noteID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNoteNotFound
@@ -103,7 +105,7 @@ func (s *NoteService) GetNote(ctx context.Context, id string) (*openapi.ModelsNo
 		return nil, err
 	}
 
-	return s.composeNoteResponse(ctx, noteResponseInput{
+	return s.composeNoteResponse(ctx.Request().Context(), noteResponseInput{
 		ID:           note.ID,
 		Title:        note.Title,
 		TemplateID:   note.TemplateID,
@@ -116,7 +118,7 @@ func (s *NoteService) GetNote(ctx context.Context, id string) (*openapi.ModelsNo
 }
 
 // CreateNote creates note and sections.
-func (s *NoteService) CreateNote(ctx context.Context, ownerID, templateID, title string, sections map[string]string) (*openapi.ModelsNoteResponse, error) {
+func (s *NoteService) CreateNote(ctx echo.Context, ownerID, templateID, title string, sections map[string]string) (*openapi.ModelsNoteResponse, error) {
 	ownerUUID, err := parseUUID(ownerID)
 	if err != nil {
 		return nil, ErrInvalidAccountID
@@ -126,20 +128,20 @@ func (s *NoteService) CreateNote(ctx context.Context, ownerID, templateID, title
 		return nil, ErrInvalidTemplateID
 	}
 
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.pool.Begin(ctx.Request().Context())
 	if err != nil {
 		return nil, err
 	}
 	txQueries := s.queries.WithTx(tx)
 
-	note, err := txQueries.CreateNote(ctx, &sqldb.CreateNoteParams{
+	note, err := txQueries.CreateNote(ctx.Request().Context(), &sqldb.CreateNoteParams{
 		Title:      strings.TrimSpace(title),
 		TemplateID: templateUUID,
 		OwnerID:    ownerUUID,
 		Status:     "Draft",
 	})
 	if err != nil {
-		if rbErr := tx.Rollback(ctx); rbErr != nil {
+		if rbErr := tx.Rollback(ctx.Request().Context()); rbErr != nil {
 			return nil, rbErr
 		}
 		return nil, err
@@ -148,31 +150,31 @@ func (s *NoteService) CreateNote(ctx context.Context, ownerID, templateID, title
 	for fieldID, content := range sections {
 		fid, parseErr := parseUUID(fieldID)
 		if parseErr != nil {
-			if rbErr := tx.Rollback(ctx); rbErr != nil {
+			if rbErr := tx.Rollback(ctx.Request().Context()); rbErr != nil {
 				return nil, rbErr
 			}
 			return nil, parseErr
 		}
-		if _, err = txQueries.CreateSection(ctx, &sqldb.CreateSectionParams{
+		if _, err = txQueries.CreateSection(ctx.Request().Context(), &sqldb.CreateSectionParams{
 			NoteID:  note.ID,
 			FieldID: fid,
 			Content: content,
 		}); err != nil {
-			if rbErr := tx.Rollback(ctx); rbErr != nil {
+			if rbErr := tx.Rollback(ctx.Request().Context()); rbErr != nil {
 				return nil, rbErr
 			}
 			return nil, err
 		}
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		if rbErr := tx.Rollback(ctx); rbErr != nil {
+	if err := tx.Commit(ctx.Request().Context()); err != nil {
+		if rbErr := tx.Rollback(ctx.Request().Context()); rbErr != nil {
 			return nil, rbErr
 		}
 		return nil, err
 	}
 
-	return s.composeNoteResponse(ctx, noteResponseInput{
+	return s.composeNoteResponse(ctx.Request().Context(), noteResponseInput{
 		ID:         note.ID,
 		Title:      note.Title,
 		TemplateID: note.TemplateID,
@@ -184,24 +186,24 @@ func (s *NoteService) CreateNote(ctx context.Context, ownerID, templateID, title
 }
 
 // UpdateNote updates title and sections.
-func (s *NoteService) UpdateNote(ctx context.Context, id, title string, sections map[string]string) (*openapi.ModelsNoteResponse, error) {
+func (s *NoteService) UpdateNote(ctx echo.Context, id, title string, sections map[string]string) (*openapi.ModelsNoteResponse, error) {
 	noteID, err := parseUUID(id)
 	if err != nil {
 		return nil, ErrInvalidNoteID
 	}
 
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.pool.Begin(ctx.Request().Context())
 	if err != nil {
 		return nil, err
 	}
 	txQueries := s.queries.WithTx(tx)
 
-	note, err := txQueries.UpdateNote(ctx, &sqldb.UpdateNoteParams{
+	note, err := txQueries.UpdateNote(ctx.Request().Context(), &sqldb.UpdateNoteParams{
 		ID:    noteID,
 		Title: strings.TrimSpace(title),
 	})
 	if err != nil {
-		if rbErr := tx.Rollback(ctx); rbErr != nil {
+		if rbErr := tx.Rollback(ctx.Request().Context()); rbErr != nil {
 			return nil, rbErr
 		}
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -213,30 +215,30 @@ func (s *NoteService) UpdateNote(ctx context.Context, id, title string, sections
 	for sectionID, content := range sections {
 		secUUID, parseErr := parseUUID(sectionID)
 		if parseErr != nil {
-			if rbErr := tx.Rollback(ctx); rbErr != nil {
+			if rbErr := tx.Rollback(ctx.Request().Context()); rbErr != nil {
 				return nil, rbErr
 			}
 			return nil, parseErr
 		}
-		if _, err := txQueries.UpdateSectionContent(ctx, &sqldb.UpdateSectionContentParams{
+		if _, err := txQueries.UpdateSectionContent(ctx.Request().Context(), &sqldb.UpdateSectionContentParams{
 			ID:      secUUID,
 			Content: content,
 		}); err != nil {
-			if rbErr := tx.Rollback(ctx); rbErr != nil {
+			if rbErr := tx.Rollback(ctx.Request().Context()); rbErr != nil {
 				return nil, rbErr
 			}
 			return nil, err
 		}
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		if rbErr := tx.Rollback(ctx); rbErr != nil {
+	if err := tx.Commit(ctx.Request().Context()); err != nil {
+		if rbErr := tx.Rollback(ctx.Request().Context()); rbErr != nil {
 			return nil, rbErr
 		}
 		return nil, err
 	}
 
-	return s.composeNoteResponse(ctx, noteResponseInput{
+	return s.composeNoteResponse(ctx.Request().Context(), noteResponseInput{
 		ID:         note.ID,
 		Title:      note.Title,
 		TemplateID: note.TemplateID,
@@ -248,7 +250,7 @@ func (s *NoteService) UpdateNote(ctx context.Context, id, title string, sections
 }
 
 // ChangeStatus toggles note status.
-func (s *NoteService) ChangeStatus(ctx context.Context, id, status string) (*openapi.ModelsNoteResponse, error) {
+func (s *NoteService) ChangeStatus(ctx echo.Context, id, status string) (*openapi.ModelsNoteResponse, error) {
 	noteID, err := parseUUID(id)
 	if err != nil {
 		return nil, ErrInvalidNoteID
@@ -258,18 +260,18 @@ func (s *NoteService) ChangeStatus(ctx context.Context, id, status string) (*ope
 		return nil, errors.New("invalid status")
 	}
 
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.pool.Begin(ctx.Request().Context())
 	if err != nil {
 		return nil, err
 	}
 	txQueries := s.queries.WithTx(tx)
 
-	note, err := txQueries.UpdateNoteStatus(ctx, &sqldb.UpdateNoteStatusParams{
+	note, err := txQueries.UpdateNoteStatus(ctx.Request().Context(), &sqldb.UpdateNoteStatusParams{
 		ID:     noteID,
 		Status: status,
 	})
 	if err != nil {
-		if rbErr := tx.Rollback(ctx); rbErr != nil {
+		if rbErr := tx.Rollback(ctx.Request().Context()); rbErr != nil {
 			return nil, rbErr
 		}
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -277,13 +279,13 @@ func (s *NoteService) ChangeStatus(ctx context.Context, id, status string) (*ope
 		}
 		return nil, err
 	}
-	if err := tx.Commit(ctx); err != nil {
-		if rbErr := tx.Rollback(ctx); rbErr != nil {
+	if err := tx.Commit(ctx.Request().Context()); err != nil {
+		if rbErr := tx.Rollback(ctx.Request().Context()); rbErr != nil {
 			return nil, rbErr
 		}
 		return nil, err
 	}
-	return s.composeNoteResponse(ctx, noteResponseInput{
+	return s.composeNoteResponse(ctx.Request().Context(), noteResponseInput{
 		ID:         note.ID,
 		Title:      note.Title,
 		TemplateID: note.TemplateID,
@@ -295,13 +297,13 @@ func (s *NoteService) ChangeStatus(ctx context.Context, id, status string) (*ope
 }
 
 // DeleteNote removes note and sections.
-func (s *NoteService) DeleteNote(ctx context.Context, id string) error {
+func (s *NoteService) DeleteNote(ctx echo.Context, id string) error {
 	noteID, err := parseUUID(id)
 	if err != nil {
 		return ErrInvalidNoteID
 	}
 
-	if err := s.queries.DeleteNote(ctx, noteID); err != nil {
+	if err := s.queries.DeleteNote(ctx.Request().Context(), noteID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNoteNotFound
 		}

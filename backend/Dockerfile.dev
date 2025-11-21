@@ -10,6 +10,7 @@ RUN go install github.com/air-verse/air@latest
 
 # Pre-fetch modules for faster startup
 COPY backend/go.mod backend/go.sum ./
+COPY backend/third_party ./third_party
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go mod download

@@ -28,7 +28,7 @@ func (c *Controller) NotesListNotes(ctx echo.Context, params openapi.NotesListNo
 		filters.Status = &status
 	}
 
-	notes, err := c.noteService.ListNotes(ctx.Request().Context(), filters)
+	notes, err := c.noteService.ListNotes(ctx, filters)
 	if err != nil {
 		return respondError(ctx, http.StatusInternalServerError, "failed to list notes")
 	}
@@ -50,7 +50,7 @@ func (c *Controller) NotesCreateNote(ctx echo.Context) error {
 	}
 
 	note, err := c.noteService.CreateNote(
-		ctx.Request().Context(),
+		ctx,
 		body.OwnerId.String(),
 		body.TemplateId.String(),
 		body.Title,
@@ -69,7 +69,7 @@ func (c *Controller) NotesCreateNote(ctx echo.Context) error {
 
 // NotesDeleteNote deletes note.
 func (c *Controller) NotesDeleteNote(ctx echo.Context, noteID string) error {
-	if err := c.noteService.DeleteNote(ctx.Request().Context(), noteID); err != nil {
+	if err := c.noteService.DeleteNote(ctx, noteID); err != nil {
 		switch {
 		case errors.Is(err, service.ErrNoteNotFound):
 			return respondError(ctx, http.StatusNotFound, "note not found")
@@ -85,7 +85,7 @@ func (c *Controller) NotesDeleteNote(ctx echo.Context, noteID string) error {
 // NotesGetNoteById returns note detail.
 // revive:disable-next-line:var-naming // Method name fixed by generated interface.
 func (c *Controller) NotesGetNoteById(ctx echo.Context, noteID string) error {
-	note, err := c.noteService.GetNote(ctx.Request().Context(), noteID)
+	note, err := c.noteService.GetNote(ctx, noteID)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrNoteNotFound):
@@ -113,7 +113,7 @@ func (c *Controller) NotesUpdateNote(ctx echo.Context, noteID string) error {
 		sections[section.Id] = section.Content
 	}
 
-	note, err := c.noteService.UpdateNote(ctx.Request().Context(), noteID, body.Title, sections)
+	note, err := c.noteService.UpdateNote(ctx, noteID, body.Title, sections)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrNoteNotFound):
@@ -138,7 +138,7 @@ func (c *Controller) NotesUnpublishNote(ctx echo.Context, noteID string) error {
 }
 
 func (c *Controller) changeNoteStatus(ctx echo.Context, noteID, status string) error {
-	note, err := c.noteService.ChangeStatus(ctx.Request().Context(), noteID, status)
+	note, err := c.noteService.ChangeStatus(ctx, noteID, status)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrNoteNotFound):

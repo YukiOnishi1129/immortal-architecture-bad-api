@@ -22,7 +22,7 @@ func (c *Controller) TemplatesListTemplates(ctx echo.Context, params openapi.Tem
 		filters.Query = params.Q
 	}
 
-	templates, err := c.templateService.ListTemplates(ctx.Request().Context(), filters)
+	templates, err := c.templateService.ListTemplates(ctx, filters)
 	if err != nil {
 		return respondError(ctx, http.StatusInternalServerError, "failed to list templates")
 	}
@@ -45,7 +45,7 @@ func (c *Controller) TemplatesCreateTemplate(ctx echo.Context) error {
 		}
 	}
 
-	template, err := c.templateService.CreateTemplate(ctx.Request().Context(), body.OwnerId.String(), body.Name, fields)
+	template, err := c.templateService.CreateTemplate(ctx, body.OwnerId.String(), body.Name, fields)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInvalidAccountID):
@@ -59,7 +59,7 @@ func (c *Controller) TemplatesCreateTemplate(ctx echo.Context) error {
 
 // TemplatesDeleteTemplate deletes template.
 func (c *Controller) TemplatesDeleteTemplate(ctx echo.Context, templateID string) error {
-	if err := c.templateService.DeleteTemplate(ctx.Request().Context(), templateID); err != nil {
+	if err := c.templateService.DeleteTemplate(ctx, templateID); err != nil {
 		switch {
 		case errors.Is(err, service.ErrTemplateNotFound):
 			return respondError(ctx, http.StatusNotFound, "template not found")
@@ -77,7 +77,7 @@ func (c *Controller) TemplatesDeleteTemplate(ctx echo.Context, templateID string
 // TemplatesGetTemplateById returns template detail.
 // revive:disable-next-line:var-naming // Method name fixed by generated interface.
 func (c *Controller) TemplatesGetTemplateById(ctx echo.Context, templateID string) error {
-	template, err := c.templateService.GetTemplate(ctx.Request().Context(), templateID)
+	template, err := c.templateService.GetTemplate(ctx, templateID)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrTemplateNotFound):
@@ -104,7 +104,7 @@ func (c *Controller) TemplatesUpdateTemplate(ctx echo.Context, templateID string
 		return respondError(ctx, http.StatusBadRequest, "at least one field is required")
 	}
 
-	template, err := c.templateService.UpdateTemplate(ctx.Request().Context(), templateID, body.Name, body.Fields)
+	template, err := c.templateService.UpdateTemplate(ctx, templateID, body.Name, body.Fields)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrTemplateNotFound):
