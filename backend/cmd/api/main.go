@@ -14,11 +14,10 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
+	"immortal-architecture-bad-api/backend/internal/controller"
 	dbpkg "immortal-architecture-bad-api/backend/internal/db"
-	sqldb "immortal-architecture-bad-api/backend/internal/db/sqlc"
 	openapi "immortal-architecture-bad-api/backend/internal/generated/openapi"
 	"immortal-architecture-bad-api/backend/internal/service"
-	"immortal-architecture-bad-api/backend/internal/transport"
 )
 
 func main() {
@@ -36,10 +35,9 @@ func main() {
 	}
 	defer pool.Close()
 
-	queries := sqldb.New(pool)
-	accountService := service.NewAccountService(queries)
-	templateService := service.NewTemplateService(queries)
-	noteService := service.NewNoteService(queries)
+	accountService := service.NewAccountService(pool)
+	templateService := service.NewTemplateService(pool)
+	noteService := service.NewNoteService(pool)
 
 	e := echo.New()
 	e.HideBanner = true
@@ -72,8 +70,8 @@ func main() {
 		return c.String(http.StatusOK, "ok")
 	})
 
-	handler := transport.NewHandler(accountService, templateService, noteService)
-	openapi.RegisterHandlers(e, handler)
+	ctrl := controller.NewController(accountService, templateService, noteService)
+	openapi.RegisterHandlers(e, ctrl)
 
 	port := os.Getenv("API_PORT")
 	if port == "" {

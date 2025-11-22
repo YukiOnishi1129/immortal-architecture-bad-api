@@ -48,3 +48,5 @@ migrate-force:
 	@bash -c 'set -a; if [ -f $(ENV_FILE) ]; then source $(ENV_FILE); fi; set +a; \
 	if [ -z "$$DATABASE_URL" ]; then echo "Set DATABASE_URL in $(ENV_FILE) or environment"; exit 1; fi; \
 	"$(MIGRATE)" -path "$(MIGRATIONS_DIR)" -database "$$DATABASE_URL" force $(version)'
+test:
+	go test ./...

@@ -7,6 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/labstack/echo/v4"
 
 	sqldb "immortal-architecture-bad-api/backend/internal/db/sqlc"
 	openapi "immortal-architecture-bad-api/backend/internal/generated/openapi"
@@ -23,12 +25,16 @@ var (
 
 // TemplateService handles template CRUD.
 type TemplateService struct {
+	pool    *pgxpool.Pool
 	queries *sqldb.Queries
 }
 
 // NewTemplateService creates a new service.
-func NewTemplateService(queries *sqldb.Queries) *TemplateService {
-	return &TemplateService{queries: queries}
+func NewTemplateService(pool *pgxpool.Pool) *TemplateService {
+	return &TemplateService{
+		pool:    pool,
+		queries: sqldb.New(pool),
+	}
 }
 
 // TemplateFilters filters template list query.
@@ -38,7 +44,8 @@ type TemplateFilters struct {
 }
 
 // ListTemplates returns templates optionally filtered by owner or search query.
-func (s *TemplateService) ListTemplates(ctx context.Context, filters TemplateFilters) ([]*openapi.ModelsTemplateResponse, error) {
+func (s *TemplateService) ListTemplates(ctx echo.Context, filters TemplateFilters) ([]*openapi.ModelsTemplateResponse, error) {
+	dbCtx := ctx.Request().Context()
 	params := &sqldb.ListTemplatesParams{}
 
 	if filters.OwnerID != nil && *filters.OwnerID != "" {
@@ -51,14 +58,14 @@ func (s *TemplateService) ListTemplates(ctx context.Context, filters TemplateFil
 		params.Column2 = *filters.Query
 	}
 
-	rows, err := s.queries.ListTemplates(ctx, params)
+	rows, err := s.queries.ListTemplates(dbCtx, params)
 	if err != nil {
 		return nil, err
 	}
 
 	responses := make([]*openapi.ModelsTemplateResponse, 0, len(rows))
 	for _, tpl := range rows {
-		response, err := s.composeTemplateResponse(ctx, tpl.ID, tpl.Name, tpl.OwnerID, tpl.UpdatedAt, tpl.IsUsed)
+		response, err := s.composeTemplateResponse(dbCtx, tpl.ID, tpl.Name, tpl.OwnerID, tpl.UpdatedAt, tpl.IsUsed)
 		if err != nil {
 			return nil, err
 		}
@@ -69,34 +76,43 @@ func (s *TemplateService) ListTemplates(ctx context.Context, filters TemplateFil
 }
 
 // GetTemplate returns a template by ID along with is_used flag.
-func (s *TemplateService) GetTemplate(ctx context.Context, id string) (*openapi.ModelsTemplateResponse, error) {
+func (s *TemplateService) GetTemplate(ctx echo.Context, id string) (*openapi.ModelsTemplateResponse, error) {
 	pgID, err := parseUUID(id)
 	if err != nil {
 		return nil, ErrInvalidTemplateID
 	}
 
-	template, err := s.queries.GetTemplateByID(ctx, pgID)
+	template, err := s.queries.GetTemplateByID(ctx.Request().Context(), pgID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTemplateNotFound
 		}
 		return nil, err
 	}
-	return s.composeTemplateResponse(ctx, template.ID, template.Name, template.OwnerID, template.UpdatedAt, template.IsUsed)
+	return s.composeTemplateResponse(ctx.Request().Context(), template.ID, template.Name, template.OwnerID, template.UpdatedAt, template.IsUsed)
 }
 
 // CreateTemplate creates a template with its fields.
-func (s *TemplateService) CreateTemplate(ctx context.Context, ownerID string, name string, fields []sqldb.Field) (*openapi.ModelsTemplateResponse, error) {
+func (s *TemplateService) CreateTemplate(ctx echo.Context, ownerID string, name string, fields []sqldb.Field) (*openapi.ModelsTemplateResponse, error) {
 	pgOwner, err := parseUUID(ownerID)
 	if err != nil {
 		return nil, ErrInvalidAccountID
 	}
 
-	template, err := s.queries.CreateTemplate(ctx, &sqldb.CreateTemplateParams{
+	tx, err := s.pool.Begin(ctx.Request().Context())
+	if err != nil {
+		return nil, err
+	}
+	txQueries := s.queries.WithTx(tx)
+
+	template, err := txQueries.CreateTemplate(ctx.Request().Context(), &sqldb.CreateTemplateParams{
 		Name:    name,
 		OwnerID: pgOwner,
 	})
 	if err != nil {
+		if rbErr := tx.Rollback(ctx.Request().Context()); rbErr != nil {
+			return nil, rbErr
+		}
 		return nil, err
 	}
 
@@ -111,32 +127,51 @@ func (s *TemplateService) CreateTemplate(ctx context.Context, ownerID string, na
 			}
 			order = int32(idx + 1) //nolint:gosec // idx is bounded above
 		}
-		_, err = s.queries.CreateField(ctx, &sqldb.CreateFieldParams{
+		_, err = txQueries.CreateField(ctx.Request().Context(), &sqldb.CreateFieldParams{
 			TemplateID: template.ID,
 			Label:      field.Label,
 			Order:      order,
 			IsRequired: field.IsRequired,
 		})
 		if err != nil {
+			if rbErr := tx.Rollback(ctx.Request().Context()); rbErr != nil {
+				return nil, rbErr
+			}
 			return nil, err
 		}
 	}
 
-	return s.composeTemplateResponse(ctx, template.ID, template.Name, template.OwnerID, template.UpdatedAt, false)
+	if err := tx.Commit(ctx.Request().Context()); err != nil {
+		if rbErr := tx.Rollback(ctx.Request().Context()); rbErr != nil {
+			return nil, rbErr
+		}
+		return nil, err
+	}
+
+	return s.composeTemplateResponse(ctx.Request().Context(), template.ID, template.Name, template.OwnerID, template.UpdatedAt, false)
 }
 
 // UpdateTemplate updates template metadata and reorders fields.
-func (s *TemplateService) UpdateTemplate(ctx context.Context, id, name string, fields []openapi.ModelsUpdateFieldRequest) (*openapi.ModelsTemplateResponse, error) {
+func (s *TemplateService) UpdateTemplate(ctx echo.Context, id, name string, fields []openapi.ModelsUpdateFieldRequest) (*openapi.ModelsTemplateResponse, error) {
 	templateID, err := parseUUID(id)
 	if err != nil {
 		return nil, ErrInvalidTemplateID
 	}
 
-	template, err := s.queries.UpdateTemplate(ctx, &sqldb.UpdateTemplateParams{
+	tx, err := s.pool.Begin(ctx.Request().Context())
+	if err != nil {
+		return nil, err
+	}
+	txQueries := s.queries.WithTx(tx)
+
+	template, err := txQueries.UpdateTemplate(ctx.Request().Context(), &sqldb.UpdateTemplateParams{
 		ID:   templateID,
 		Name: name,
 	})
 	if err != nil {
+		if rbErr := tx.Rollback(ctx.Request().Context()); rbErr != nil {
+			return nil, rbErr
+		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTemplateNotFound
 		}
@@ -147,49 +182,83 @@ func (s *TemplateService) UpdateTemplate(ctx context.Context, id, name string, f
 		if len(fields) == 0 {
 			return nil, errors.New("at least one field is required")
 		}
-		if err := s.syncTemplateFields(ctx, templateID, fields); err != nil {
+		if err := s.syncTemplateFields(ctx.Request().Context(), txQueries, templateID, fields); err != nil {
+			if rbErr := tx.Rollback(ctx.Request().Context()); rbErr != nil {
+				return nil, rbErr
+			}
 			return nil, err
 		}
 	}
 
-	isUsed, err := s.queries.CheckTemplateInUse(ctx, templateID)
+	isUsed, err := txQueries.CheckTemplateInUse(ctx.Request().Context(), templateID)
 	if err != nil {
+		if rbErr := tx.Rollback(ctx.Request().Context()); rbErr != nil {
+			return nil, rbErr
+		}
 		return nil, err
 	}
 
-	return s.composeTemplateResponse(ctx, template.ID, template.Name, template.OwnerID, template.UpdatedAt, isUsed)
+	if err := tx.Commit(ctx.Request().Context()); err != nil {
+		if rbErr := tx.Rollback(ctx.Request().Context()); rbErr != nil {
+			return nil, rbErr
+		}
+		return nil, err
+	}
+
+	return s.composeTemplateResponse(ctx.Request().Context(), template.ID, template.Name, template.OwnerID, template.UpdatedAt, isUsed)
 }
 
 // DeleteTemplate removes template if not in use.
-func (s *TemplateService) DeleteTemplate(ctx context.Context, id string) error {
+func (s *TemplateService) DeleteTemplate(ctx echo.Context, id string) error {
 	templateID, err := parseUUID(id)
 	if err != nil {
 		return ErrInvalidTemplateID
 	}
 
-	inUse, err := s.queries.CheckTemplateInUse(ctx, templateID)
+	tx, err := s.pool.Begin(ctx.Request().Context())
 	if err != nil {
 		return err
 	}
+	txQueries := s.queries.WithTx(tx)
+
+	inUse, err := txQueries.CheckTemplateInUse(ctx.Request().Context(), templateID)
+	if err != nil {
+		if rbErr := tx.Rollback(ctx.Request().Context()); rbErr != nil {
+			return rbErr
+		}
+		return err
+	}
 	if inUse {
+		if rbErr := tx.Rollback(ctx.Request().Context()); rbErr != nil {
+			return rbErr
+		}
 		return ErrTemplateInUse
 	}
 
-	if err := s.queries.DeleteTemplate(ctx, templateID); err != nil {
+	if err := txQueries.DeleteTemplate(ctx.Request().Context(), templateID); err != nil {
+		if rbErr := tx.Rollback(ctx.Request().Context()); rbErr != nil {
+			return err
+		}
+		return err
+	}
+	if err := tx.Commit(ctx.Request().Context()); err != nil {
+		if rbErr := tx.Rollback(ctx.Request().Context()); rbErr != nil {
+			return err
+		}
 		return err
 	}
 	return nil
 }
 
-func (s *TemplateService) syncTemplateFields(ctx context.Context, templateID pgtype.UUID, fields []openapi.ModelsUpdateFieldRequest) error {
-	existing, err := s.queries.ListFieldsByTemplate(ctx, templateID)
+func (s *TemplateService) syncTemplateFields(ctx context.Context, queries *sqldb.Queries, templateID pgtype.UUID, fields []openapi.ModelsUpdateFieldRequest) error {
+	existing, err := queries.ListFieldsByTemplate(ctx, templateID)
 	if err != nil {
 		return err
 	}
 
 	needsTrim := len(fields) < len(existing)
 	if needsTrim {
-		inUse, err := s.queries.CheckTemplateInUse(ctx, templateID)
+		inUse, err := queries.CheckTemplateInUse(ctx, templateID)
 		if err != nil {
 			return err
 		}
@@ -232,7 +301,7 @@ func (s *TemplateService) syncTemplateFields(ctx context.Context, templateID pgt
 
 	if needsTrim {
 		for _, obsolete := range existing[len(fields):] {
-			if err := s.queries.DeleteField(ctx, obsolete.ID); err != nil {
+			if err := queries.DeleteField(ctx, obsolete.ID); err != nil {
 				return err
 			}
 		}

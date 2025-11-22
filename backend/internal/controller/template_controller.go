@@ -1,4 +1,3 @@
-// Package controller exposes HTTP handlers for Echo.
 package controller
 
 import (
@@ -9,150 +8,114 @@ import (
 	"github.com/labstack/echo/v4"
 
 	sqldb "immortal-architecture-bad-api/backend/internal/db/sqlc"
+	openapi "immortal-architecture-bad-api/backend/internal/generated/openapi"
 	"immortal-architecture-bad-api/backend/internal/service"
 )
 
-// TemplateController handles template endpoints.
-type TemplateController struct {
-	service *service.TemplateService
-}
-
-// NewTemplateController creates controller.
-func NewTemplateController(service *service.TemplateService) *TemplateController {
-	return &TemplateController{service: service}
-}
-
-// Register routes under /api/templates.
-func (h *TemplateController) Register(router *echo.Group) {
-	router.GET("", h.listTemplates)
-	router.POST("", h.createTemplate)
-	router.GET("/:templateId", h.getTemplate)
-	router.PUT("/:templateId", h.updateTemplate)
-	router.DELETE("/:templateId", h.deleteTemplate)
-}
-
-type templateFieldPayload struct {
-	Label      string `json:"label"`
-	IsRequired bool   `json:"isRequired"`
-	Order      int32  `json:"order"`
-}
-
-type templatePayload struct {
-	Name    string                 `json:"name"`
-	OwnerID string                 `json:"ownerId"`
-	Fields  []templateFieldPayload `json:"fields"`
-}
-
-func (p *templatePayload) validate() string {
-	if strings.TrimSpace(p.Name) == "" {
-		return "name is required"
-	}
-	if strings.TrimSpace(p.OwnerID) == "" {
-		return "ownerId is required"
-	}
-	return ""
-}
-
-func (h *TemplateController) listTemplates(c echo.Context) error {
-	owner := c.QueryParam("ownerId")
-	query := c.QueryParam("q")
-
+// TemplatesListTemplates returns template list.
+func (c *Controller) TemplatesListTemplates(ctx echo.Context, params openapi.TemplatesListTemplatesParams) error {
 	filters := service.TemplateFilters{}
-	if owner != "" {
-		filters.OwnerID = &owner
+	if params.OwnerId != nil {
+		filters.OwnerID = params.OwnerId
 	}
-	if query != "" {
-		filters.Query = &query
+	if params.Q != nil {
+		filters.Query = params.Q
 	}
 
-	templates, err := h.service.ListTemplates(c.Request().Context(), filters)
+	templates, err := c.templateService.ListTemplates(ctx, filters)
 	if err != nil {
-		return respondError(c, http.StatusInternalServerError, "failed to list templates", err)
+		return respondError(ctx, http.StatusInternalServerError, "failed to list templates")
 	}
-
-	return c.JSON(http.StatusOK, templates)
+	return ctx.JSON(http.StatusOK, templates)
 }
 
-func (h *TemplateController) getTemplate(c echo.Context) error {
-	templateID := c.Param("templateId")
-	template, err := h.service.GetTemplate(c.Request().Context(), templateID)
-	if err != nil {
-		if errors.Is(err, service.ErrTemplateNotFound) {
-			return respondError(c, http.StatusNotFound, "template not found", err)
-		}
-		if errors.Is(err, service.ErrInvalidTemplateID) {
-			return respondError(c, http.StatusBadRequest, "invalid template id", err)
-		}
-		return respondError(c, http.StatusInternalServerError, "failed to fetch template", err)
-	}
-	return c.JSON(http.StatusOK, template)
-}
-
-func (h *TemplateController) createTemplate(c echo.Context) error {
-	var payload templatePayload
-	if err := c.Bind(&payload); err != nil {
-		return respondError(c, http.StatusBadRequest, "invalid payload", err)
-	}
-	if msg := payload.validate(); msg != "" {
-		return respondError(c, http.StatusBadRequest, msg, nil)
+// TemplatesCreateTemplate creates template.
+func (c *Controller) TemplatesCreateTemplate(ctx echo.Context) error {
+	var body openapi.TemplatesCreateTemplateJSONRequestBody
+	if err := ctx.Bind(&body); err != nil {
+		return respondError(ctx, http.StatusBadRequest, "invalid payload")
 	}
 
-	fields := make([]sqldb.Field, len(payload.Fields))
-	for i, f := range payload.Fields {
+	fields := make([]sqldb.Field, len(body.Fields))
+	for i, field := range body.Fields {
 		fields[i] = sqldb.Field{
-			Label:      f.Label,
-			Order:      f.Order,
-			IsRequired: f.IsRequired,
+			Label:      field.Label,
+			Order:      field.Order,
+			IsRequired: field.IsRequired,
 		}
 	}
 
-	template, err := h.service.CreateTemplate(c.Request().Context(), payload.OwnerID, payload.Name, fields)
+	template, err := c.templateService.CreateTemplate(ctx, body.OwnerId.String(), body.Name, fields)
 	if err != nil {
-		return respondError(c, http.StatusInternalServerError, "failed to create template", err)
+		switch {
+		case errors.Is(err, service.ErrInvalidAccountID):
+			return respondError(ctx, http.StatusBadRequest, "invalid owner id")
+		default:
+			return respondError(ctx, http.StatusInternalServerError, "failed to create template")
+		}
 	}
-	return c.JSON(http.StatusCreated, template)
+	return ctx.JSON(http.StatusCreated, template)
 }
 
-func (h *TemplateController) updateTemplate(c echo.Context) error {
-	templateID := c.Param("templateId")
-	var payload struct {
-		Name string `json:"name"`
-	}
-	if err := c.Bind(&payload); err != nil {
-		return respondError(c, http.StatusBadRequest, "invalid payload", err)
-	}
-	if strings.TrimSpace(payload.Name) == "" {
-		return respondError(c, http.StatusBadRequest, "name is required", nil)
-	}
-
-	template, err := h.service.UpdateTemplate(c.Request().Context(), templateID, payload.Name, nil)
-	if err != nil {
-		if errors.Is(err, service.ErrTemplateNotFound) {
-			return respondError(c, http.StatusNotFound, "template not found", err)
+// TemplatesDeleteTemplate deletes template.
+func (c *Controller) TemplatesDeleteTemplate(ctx echo.Context, templateID string) error {
+	if err := c.templateService.DeleteTemplate(ctx, templateID); err != nil {
+		switch {
+		case errors.Is(err, service.ErrTemplateNotFound):
+			return respondError(ctx, http.StatusNotFound, "template not found")
+		case errors.Is(err, service.ErrTemplateInUse):
+			return respondError(ctx, http.StatusConflict, "template in use")
+		case errors.Is(err, service.ErrInvalidTemplateID):
+			return respondError(ctx, http.StatusBadRequest, "invalid template id")
+		default:
+			return respondError(ctx, http.StatusInternalServerError, "failed to delete template")
 		}
-		if errors.Is(err, service.ErrInvalidTemplateID) {
-			return respondError(c, http.StatusBadRequest, "invalid template id", err)
-		}
-		return respondError(c, http.StatusInternalServerError, "failed to update template", err)
 	}
-
-	return c.JSON(http.StatusOK, template)
+	return ctx.JSON(http.StatusOK, openapi.ModelsSuccessResponse{Success: true})
 }
 
-func (h *TemplateController) deleteTemplate(c echo.Context) error {
-	templateID := c.Param("templateId")
-	err := h.service.DeleteTemplate(c.Request().Context(), templateID)
+// TemplatesGetTemplateById returns template detail.
+// revive:disable-next-line:var-naming // Method name fixed by generated interface.
+func (c *Controller) TemplatesGetTemplateById(ctx echo.Context, templateID string) error {
+	template, err := c.templateService.GetTemplate(ctx, templateID)
 	if err != nil {
-		if errors.Is(err, service.ErrTemplateNotFound) {
-			return respondError(c, http.StatusNotFound, "template not found", err)
+		switch {
+		case errors.Is(err, service.ErrTemplateNotFound):
+			return respondError(ctx, http.StatusNotFound, "template not found")
+		case errors.Is(err, service.ErrInvalidTemplateID):
+			return respondError(ctx, http.StatusBadRequest, "invalid template id")
+		default:
+			return respondError(ctx, http.StatusInternalServerError, "failed to fetch template")
 		}
-		if errors.Is(err, service.ErrTemplateInUse) {
-			return respondError(c, http.StatusConflict, "template in use", err)
-		}
-		if errors.Is(err, service.ErrInvalidTemplateID) {
-			return respondError(c, http.StatusBadRequest, "invalid template id", err)
-		}
-		return respondError(c, http.StatusInternalServerError, "failed to delete template", err)
 	}
-	return c.NoContent(http.StatusNoContent)
+	return ctx.JSON(http.StatusOK, template)
+}
+
+// TemplatesUpdateTemplate updates template name.
+func (c *Controller) TemplatesUpdateTemplate(ctx echo.Context, templateID string) error {
+	var body openapi.TemplatesUpdateTemplateJSONRequestBody
+	if err := ctx.Bind(&body); err != nil {
+		return respondError(ctx, http.StatusBadRequest, "invalid payload")
+	}
+	if strings.TrimSpace(body.Name) == "" {
+		return respondError(ctx, http.StatusBadRequest, "name is required")
+	}
+	if len(body.Fields) == 0 {
+		return respondError(ctx, http.StatusBadRequest, "at least one field is required")
+	}
+
+	template, err := c.templateService.UpdateTemplate(ctx, templateID, body.Name, body.Fields)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrTemplateNotFound):
+			return respondError(ctx, http.StatusNotFound, "template not found")
+		case errors.Is(err, service.ErrInvalidTemplateID):
+			return respondError(ctx, http.StatusBadRequest, "invalid template id")
+		case errors.Is(err, service.ErrTemplateInUse):
+			return respondError(ctx, http.StatusConflict, "template is used by existing notes")
+		default:
+			return respondError(ctx, http.StatusInternalServerError, "failed to update template")
+		}
+	}
+	return ctx.JSON(http.StatusOK, template)
 }
