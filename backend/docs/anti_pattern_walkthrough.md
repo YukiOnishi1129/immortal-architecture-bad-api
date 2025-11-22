@@ -1,85 +1,99 @@
-# アンチパターン実装ウォークスルー
+# Lesson 2: アンチパターン実装ウォークスルー
 
-この Go バックエンドは「やってはいけない設計」をわざと詰め込んだ教材です。OpenAPI の I/O だけは守っていますが、それ以外は現場で遭遇しがちな地雷を並べています。バックエンド設計に慣れていない人でも一発で「これはマズい」と感じられるよう、症状と実害をシンプルに並べました。
+ここからは実際のコードを開きながら「どこで何が壊れているのか」を確かめます。各セクションに **Try it** を挟んでいるので、IDE を開きつつ同じファイルを覗いてください。ファイル名は `backend/` を基準に書いてあります。
 
 ---
 
-## 0. まず全体像
+## 0. ざっくり診断表
 
-| どこで壊れているか | 具体的な症状 | すぐ確認できるファイル |
+| どこで壊れている? | 何が起きている? | まず見るファイル |
 | --- | --- | --- |
-| Controller が太りすぎ | 1 メソッドで HTTP 入出力・バリデーション・DB 詰め替えを全部処理 | `internal/controller/*_controller.go` |
-| Service が外部依存まみれ | OpenAPI の型と `sqlc` の型、さらには `echo.Context` まで引きずり込む | `internal/service/*.go` |
-| トランザクションを素手で書く | どのユースケースでも `Begin/Commit/Rollback` をコピペ | `internal/service/note_service.go` など |
-| 条件分岐だらけ | ステータス判定やフィルターがひたすら if/else で散らばる | `internal/service/note_service.go` |
-| エラーが全部同じ顔 | `failed to ...` しか返らず原因が分からない | `internal/controller/helpers.go` |
-| テストはほぼ無理 | Service をモックだけで検証できず、コメントで「ここまで書きたいのに無理」と嘆いている | `internal/service/template_service_test.go` |
+| Controller が肥大化 | 1 メソッドで HTTP 入出力〜DB 詰め替えまで全部担当 | `internal/controller/*_controller.go` |
+| Service が外部依存まみれ | OpenAPI 型・sqlc 型・`echo.Context` をそのまま握る | `internal/service/*.go` |
+| トランザクションを素手で書く | 全ユースケースで `Begin/Commit/Rollback` をコピペ | `internal/service/note_service.go` ほか |
+| if/switch で泥沼 | ステータスや検索条件の分岐が延々と続く | `internal/service/note_service.go` |
+| エラーの顔が全部一緒 | `failed to ...` しか返らず原因不明 | `internal/controller/helpers.go` |
+| テストがほぼ無理 | Service テストがコメントで「書きたいけど無理」と叫ぶ | `internal/service/template_service_test.go` |
 
 ---
 
 ## 1. Controller が何でも屋
 
 - 例: `internal/controller/template_controller.go` の `TemplatesCreateTemplate`
-- 1 つの HTTP ハンドラの中で JSON パース → 入力チェック → DB 用構造体作成 → Service 呼び出し → レスポンス整形を全部担当。
-- コードが 50 行超えは当たり前で、仕様追加のたびに Controller だけで大量修正が発生。
-- Echo の `Context` や OpenAPI 型、`sqldb.Field` などの型がごちゃ混ぜで登場。
-- **実害**: どこに何のロジックがあるか覚えられない。テストを書くには Echo の Context をモックし、API 用と DB 用のオブジェクトを両方用意する必要があり、誰も着手しなくなる。
+- JSON バインド → 追加バリデーション → DB 用 struct に詰め替え → Service 呼び出し → レスポンス整形を 1 関数で実施。
+- Echo の `Context`、OpenAPI の DTO、sqlc のモデルが同居しており、責務が 1 ミリも分離されていない。
+- **痛み**: 仕様追加ごとに Controller を修正し、同じバリデーションを複数メソッドへコピペ。テストを書くには Echo Context と DB 型を両方構築する必要がある。
+
+> ✅ **Try it**: `rg "TemplatesCreateTemplate" -n internal/controller` を実行し、1 関数の行数と `sqldb.Field` を組み立てる処理を確認してみてください。
 
 ---
 
-## 2. Service が Echo と DB にべったり
+## 2. Service が Echo / DB にベッタリ
 
 - 例: `internal/service/template_service.go`
-- 関数の定義からして `CreateTemplate(ctx echo.Context, ...)` のように Web フレームワーク依存。将来、別のフレームワークの Fiber/chi などに変えたくても Service から全部書き換えが必要。
-- OpenAPI で生成した `openapi.Models*` と、`sqlc` が出す `sqldb.*` をそのまま受け渡し。ドメインの独自型が存在しない。
-- **実害**: API スキーマや DB スキーマの変更が一気に全部の層へ波及する。Service の単体テストを書くには Echo のモックと `sqlc` のモックを両方用意しなければならず、テストコードだけで数百行に膨れ上がる。
+- メソッドシグネチャが `CreateTemplate(ctx echo.Context, ...)` という時点で Web フレームワーク依存。
+- OpenAPI で生成した `openapi.Models*` と sqlc が吐く `sqldb.*` をそのまま受け渡し、ドメイン独自の型が存在しない。
+- **痛み**: API/DB の仕様変更が全層へ波及。ユニットテストでは Echo Context も sqlc モックも必要で、テストコードだけで疲弊します。
+
+> ✅ **Try it**: `rg "CreateTemplate(ctx echo.Context" -n` で該当メソッドを開き、引数と戻り値に何種類の型が混ざっているか数えてみてください。
 
 ---
 
 ## 3. トランザクションを素手で管理
 
-- 例: `internal/service/note_service.go:118-175`
-- ほぼすべてのユースケースで `tx, err := s.pool.Begin(ctx)` から始まり、`Commit` と `Rollback` を手で書いている。
-- どこかで `Rollback` を書き忘れるだけで簡単にリークする。`make lint` でも `Rollback` のエラーチェック漏れが大量に指摘される。
-- **実害**: 些細な修正でトランザクション制御を壊しやすい。Repository を挟んでいないので、テストでも本物の DB を立てない限り動作を保証できない。
+- 例: `internal/service/note_service.go` の `CreateNote`, `UpdateNote`, `ChangeStatus`
+- どのユースケースも `tx, err := s.pool.Begin(ctx)` から始まり、`Rollback`/`Commit` を手書き。わずかな変更でロールバック忘れが発生します。
+- `make lint` を実行すると `Rollback` のエラーチェック漏れ警告が大量に出るのは、コピペ構造のせい。
+- **痛み**: Repository 層が存在しないため、ユニットテストでトランザクションを挙動させる術がなく、DB を立ち上げた統合テスト頼みになります。
+
+> ✅ **Try it**: `rg "Begin(ctx.Request" -n internal/service` を実行し、何ファイルで同じパターンが繰り返されているか数えてみる。
 
 ---
 
-## 4. if 分岐だらけのユースケース
+## 4. if 文だらけのユースケース
 
-- 例: `internal/service/note_service.go` の `ListNotes`, `ChangeStatus`
-- `if filters.OwnerID != nil { ... }` のような分岐がメソッド全体に散らばり、ステータスや検索条件が 1 つ増えるだけで複数の if を追加するハメになる。
-- **実害**: 「Draft のときだけ特別なチェック」などの要件を追加すると、一体どこを直せばいいか分からない。レビューで読み切るのも困難。
+- 例: `internal/service/note_service.go` の `ListNotes` や `ChangeStatus`
+- ステータスや検索条件を素の文字列で比較し、`if filters.OwnerID != nil { ... }` が延々続く。
+- 新しい状態や絞り込み条件を追加すると、関係しそうな if 文を全部探して修正する羽目に。
+- **痛み**: 条件の抜け漏れが発生しやすく、レビュー側も全体像を把握できません。
+
+> ✅ **Try it**: `note_service.go` で `status != "Draft" && status != "Publish"` を検索し、別の関数でも同じようなチェックが散らばっていることを確認しましょう。
 
 ---
 
 ## 5. 役に立たないエラーレスポンス
 
-- 例: `internal/controller/helpers.go`
-- `respondError` は `Code = HTTP ステータス文字列`, `Message = 固定文言` でしか返せない。
-- 404 でも 500 でも `"failed to ..."` としか返さないので、クライアントはログを掘らないと原因が分からない。
-- **実害**: エラーハンドリングを改善したくなったとき、全 Controller を横断的に書き換えないといけない。API クライアントからはバグにしか見えない。
+- 例: `internal/controller/helpers.go` の `respondError`
+- どのエラーでも `Code = HTTP ステータス文字列`, `Message = 固定文言` で返却。`template not found` と `internal error` の区別がつかないケースがほとんど。
+- **痛み**: クライアントはログを覗かないと原因が分からず、API の利用者からは「常に failed to ...」としか見えない。
+
+> ✅ **Try it**: `respondError` の呼び出し元を `rg "respondError" -n internal/controller` で一覧し、すべて固定メッセージになっていることを確認してください。
 
 ---
 
-## 6. テストで詰む様子をそのまま残してある
+## 6. テストで詰む様子をそのまま展示
 
-- `internal/service/template_service_test.go` に、書ききれないテストケースをコメントで列挙している。
-- たとえば以下のような正常系/異常系は、本来 Service 層の責務として検証したいが、DB と `sqlc` に直結しているためモックだけでは再現できない。
-- コメント例: 「フィールド生成が途中で失敗したらトランザクションがロールバックされるか」「`pool.Begin` が失敗したときの扱い」「ownerId が存在しないときの外部キー制約エラー」など。
-- **実害**: ユニットテストでは何も保証できず、結局 DB を立ち上げた統合テストを毎回走らせるしかない。開発速度が大幅に落ちる。
+- 例: `internal/service/template_service_test.go`
+- ユニットテストには `ownerID` の形式チェックなど一部だけを書き、書きたいテストはコメントで列挙。「トランザクションがロールバックされるか」など DB 依存のケースは再現不能だからです。
+- **痛み**: 「本当はここまで保証したい」という想いがコメントに滲むだけで、品質は上がらない。DB を使った統合テスト無しでは何も担保できない構造だと再認識できます。
+
+> ✅ **Try it**: `template_service_test.go` のコメントアウトされたケースを読み、「なぜモックで再現できないのか？」を自分の言葉で説明できるか挑戦してみましょう。
 
 ---
 
-## 7. まとめ（この設計がどれだけ辛いか）
+## 7. 今日の気づきをメモしよう
 
-| アンチパターン | 目印 | 実際に困ること |
-| --- | --- | --- |
-| Controller 何でも屋 | `*_controller.go` が巨大 | 仕様変更時に Controller も Service も二度書き。レビューもテストも地獄 |
-| Service が Echo/DB 依存 | `CreateTemplate(ctx echo.Context, ...)` | フレームワーク変更・DB 変更で全層を書き換え。テストでモック地獄 |
-| 手書きトランザクション | コピペされた `tx.Begin/Commit/Rollback` | Rollback 忘れの温床。Repository がないので差し替え不能 |
-| if だらけのビジネスロジック | `note_service.go` の大量 if | 新条件を足すたびに既存ロジックを壊すリスク増大 |
-| 使えないエラーレスポンス | `respondError` | クライアントから原因が見えず、デバッグが辛い |
-| テスト不能 | `template_service_test.go` のコメント | 「本来書くべきユニットテスト」が全部コメントに追いやられている |
+| アンチパターン | 見つけたファイル/行 | どんな痛みを感じたか | どう直したいかのメモ |
+| --- | --- | --- | --- |
+| Controller 何でも屋 | | | |
+| Service が Echo/DB 依存 | | | |
+| 手書きトランザクション | | | |
+| if/switch 地獄 | | | |
+| 使えないエラーレスポンス | | | |
+| テスト不能 | | | |
 
-このドキュメントと実際のコードを照らし合わせれば、アンチパターンがどうやって開発体験を壊すのかを簡単に観察できます。「フレームワーク/DB に依存した Service」「Controller が肥大化する構造」など、どれか 1 つでも当てはまるとテストや保守が一気に難しくなることが分かるはずです。
+※ 上の表は学習ノート用。コピーして使ってください。`anti_pattern_fix.md` を読むときに、このメモが役立ちます。
+
+---
+
+ここまでで「どこが辛いか」が見えてきたはずです。次は `anti_pattern_fix.md` を開き、同じ問題をどうやって改善するのかをイメージしていきましょう。EOF
