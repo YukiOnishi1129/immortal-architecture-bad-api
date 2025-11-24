@@ -11,6 +11,7 @@ import (
 type AccountServicer interface {
 	CreateOrGetAccount(echo.Context, CreateOrGetAccountInput) (*sqldb.Account, error)
 	GetAccountByID(echo.Context, string) (*sqldb.Account, error)
+	GetAccountByEmail(echo.Context, string) (*sqldb.Account, error)
 }
 
 // TemplateServicer represents the TemplateService contract.

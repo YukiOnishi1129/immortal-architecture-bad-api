@@ -74,3 +74,20 @@ func (c *Controller) AccountsGetAccountById(ctx echo.Context, accountID string) 
 	}
 	return ctx.JSON(http.StatusOK, accountToResponse(account))
 }
+
+// AccountsGetAccountByEmail returns account by email.
+func (c *Controller) AccountsGetAccountByEmail(ctx echo.Context, params openapi.AccountsGetAccountByEmailParams) error {
+	if strings.TrimSpace(params.Email) == "" {
+		return respondError(ctx, http.StatusBadRequest, "email is required")
+	}
+	account, err := c.accountService.GetAccountByEmail(ctx, params.Email)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrAccountNotFound):
+			return respondError(ctx, http.StatusNotFound, "account not found")
+		default:
+			return respondError(ctx, http.StatusInternalServerError, "failed to fetch account")
+		}
+	}
+	return ctx.JSON(http.StatusOK, accountToResponse(account))
+}

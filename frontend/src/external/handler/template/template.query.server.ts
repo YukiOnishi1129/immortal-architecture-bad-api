@@ -1,10 +1,7 @@
 import "server-only";
 
 import { getSessionServer } from "@/features/auth/servers/auth.server";
-import {
-  getAuthenticatedSessionServer,
-  requireAuthServer,
-} from "@/features/auth/servers/redirect.server";
+import { getAuthenticatedSessionServer } from "@/features/auth/servers/redirect.server";
 import type { TemplateFilters } from "@/features/template/types";
 import {
   TemplateDetailResponseSchema,
@@ -23,10 +20,11 @@ export async function getTemplateByIdQuery(id: string) {
 }
 
 export async function listTemplatesQuery(filters?: TemplateFilters) {
-  await requireAuthServer();
-
   // Get current user for onlyMyTemplates filter
   const session = await getSessionServer();
+  if (!session?.account?.id) {
+    throw new Error("Unauthorized: No active session");
+  }
 
   const ownerFilter =
     filters?.onlyMyTemplates && session?.account.id
@@ -43,6 +41,9 @@ export async function listTemplatesQuery(filters?: TemplateFilters) {
 
 export async function listMyTemplatesQuery() {
   const session = await getAuthenticatedSessionServer();
+  if (!session?.account?.id) {
+    throw new Error("Unauthorized: No active session");
+  }
 
   const templates = await templateService.getTemplates({
     ownerId: session.account.id,
