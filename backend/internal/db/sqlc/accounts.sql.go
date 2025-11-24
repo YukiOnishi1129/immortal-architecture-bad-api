@@ -11,6 +11,31 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getAccountByEmail = `-- name: GetAccountByEmail :one
+SELECT id, email, first_name, last_name, is_active, provider, provider_account_id, thumbnail, last_login_at, created_at, updated_at
+FROM accounts
+WHERE email = $1
+`
+
+func (q *Queries) GetAccountByEmail(ctx context.Context, email string) (*Account, error) {
+	row := q.db.QueryRow(ctx, getAccountByEmail, email)
+	var i Account
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.FirstName,
+		&i.LastName,
+		&i.IsActive,
+		&i.Provider,
+		&i.ProviderAccountID,
+		&i.Thumbnail,
+		&i.LastLoginAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return &i, err
+}
+
 const getAccountByID = `-- name: GetAccountByID :one
 SELECT id, email, first_name, last_name, is_active, provider, provider_account_id, thumbnail, last_login_at, created_at, updated_at
 FROM accounts

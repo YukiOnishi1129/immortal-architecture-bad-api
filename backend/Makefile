@@ -35,13 +35,14 @@ migrate-create:
 
 migrate-up:
 	@bash -c 'set -a; if [ -f $(ENV_FILE) ]; then source $(ENV_FILE); fi; set +a; \
-	if [ -z "$$DATABASE_URL" ]; then echo "Set DATABASE_URL in $(ENV_FILE) or environment"; exit 1; fi; \
-	"$(MIGRATE)" -path "$(MIGRATIONS_DIR)" -database "$$DATABASE_URL" up'
+	if [ -z "$$MIGRATION_DATABASE_URL" ]; then echo "Set MIGRATION_DATABASE_URL in $(ENV_FILE) or environment"; exit 1; fi; \
+	"$(MIGRATE)" -path "$(MIGRATIONS_DIR)" -database "$$MIGRATION_DATABASE_URL" up'
 
 migrate-down:
 	@bash -c 'set -a; if [ -f $(ENV_FILE) ]; then source $(ENV_FILE); fi; set +a; \
-	if [ -z "$$DATABASE_URL" ]; then echo "Set DATABASE_URL in $(ENV_FILE) or environment"; exit 1; fi; \
-	"$(MIGRATE)" -path "$(MIGRATIONS_DIR)" -database "$$DATABASE_URL" down 1'
+	if [ -z "$$MIGRATION_DATABASE_URL" ]; then echo "Set MIGRATION_DATABASE_URL in $(ENV_FILE) or environment"; exit 1; fi; \
+	"$(MIGRATE)" -path "$(MIGRATIONS_DIR)" -database "$$MIGRATION_DATABASE_URL" down 1'
+
 
 migrate-force:
 	@if [ -z "$(version)" ]; then echo "Usage: make migrate-force version=20240101010101"; exit 1; fi

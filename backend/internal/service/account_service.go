@@ -105,6 +105,24 @@ func (s *AccountService) GetAccountByID(ctx echo.Context, id string) (*sqldb.Acc
 	return account, nil
 }
 
+// GetAccountByEmail fetches an account using its email address.
+func (s *AccountService) GetAccountByEmail(ctx echo.Context, email string) (*sqldb.Account, error) {
+	trimmedEmail := strings.TrimSpace(email)
+	if trimmedEmail == "" {
+		return nil, errors.New("email is required")
+	}
+
+	account, err := s.queries.GetAccountByEmail(ctx.Request().Context(), trimmedEmail)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrAccountNotFound
+		}
+		return nil, err
+	}
+
+	return account, nil
+}
+
 func splitName(full string) (string, string) {
 	full = strings.TrimSpace(full)
 	if full == "" {

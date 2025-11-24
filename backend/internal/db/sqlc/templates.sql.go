@@ -78,16 +78,6 @@ func (q *Queries) CreateTemplate(ctx context.Context, arg *CreateTemplateParams)
 	return &i, err
 }
 
-const deleteFieldsByTemplate = `-- name: DeleteFieldsByTemplate :exec
-DELETE FROM fields
-WHERE template_id = $1
-`
-
-func (q *Queries) DeleteFieldsByTemplate(ctx context.Context, templateID pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, deleteFieldsByTemplate, templateID)
-	return err
-}
-
 const deleteField = `-- name: DeleteField :exec
 DELETE FROM fields
 WHERE id = $1
@@ -95,6 +85,16 @@ WHERE id = $1
 
 func (q *Queries) DeleteField(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deleteField, id)
+	return err
+}
+
+const deleteFieldsByTemplate = `-- name: DeleteFieldsByTemplate :exec
+DELETE FROM fields
+WHERE template_id = $1
+`
+
+func (q *Queries) DeleteFieldsByTemplate(ctx context.Context, templateID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteFieldsByTemplate, templateID)
 	return err
 }
 

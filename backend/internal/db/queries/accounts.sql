@@ -3,6 +3,11 @@ SELECT *
 FROM accounts
 WHERE id = $1;
 
+-- name: GetAccountByEmail :one
+SELECT *
+FROM accounts
+WHERE email = $1;
+
 -- name: GetAccountByProvider :one
 SELECT *
 FROM accounts

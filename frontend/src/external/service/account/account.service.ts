@@ -33,16 +33,37 @@ export class AccountService {
   async createOrGet(
     input: CreateOrGetAccountRequest,
   ): Promise<AccountResponse> {
-    const account = await this.api.accountsCreateOrGetAccount({
-      modelsCreateOrGetAccountRequest: input,
-    });
-    return toAccountResponse(account);
+    try {
+      const account = await this.api.accountsCreateOrGetAccount({
+        modelsCreateOrGetAccountRequest: input,
+      });
+      return toAccountResponse(account);
+    } catch (error) {
+      console.error("[AccountService] Failed to create account:", error);
+      throw error;
+    }
   }
 
   async getAccountById(id: string): Promise<AccountResponse | null> {
     try {
       const account = await this.api.accountsGetAccountById({
         accountId: id,
+      });
+      return toAccountResponse(account);
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  async getCurrentAccountByEmail(
+    email: string,
+  ): Promise<AccountResponse | null> {
+    try {
+      const account = await this.api.accountsGetAccountByEmail({
+        email: email,
       });
       return toAccountResponse(account);
     } catch (error) {
