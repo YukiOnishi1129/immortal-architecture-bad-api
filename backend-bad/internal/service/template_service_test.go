@@ -21,12 +21,15 @@ func newEchoContext() echo.Context {
 func TestTemplateService_CreateTemplate_Validation(t *testing.T) {
 	t.Parallel()
 
-	// TemplateService.CreateTemplate が本来担保したい責務:
-	// 1. ownerID の形式チェック（唯一ユニットテストで確認できる）
-	// 2. fields を sqldb.Field に詰め替え、order を自動補完
-	// 3. トランザクション管理（Begin/Commit/Rollback）と CreateField の挿入結果検証
-	// 4. ownerID/fields に紐づく DB 制約エラーをハンドリング
-	// しかし Service が pgxpool/sqlc と直結しているため、2 以降は DB か巨大モックを用意しない限り再現できない。
+	// 本当はこういうことをテストしたい:
+	//   1. ownerID が不正な形式ならエラー
+	//   2. fields の order が 0 なら自動採番される
+	//   3. DB挿入が失敗したらロールバックされる
+	//   4. 存在しない ownerID なら外部キー違反エラー
+	//
+	// でも今の設計だと 1 しかテストできない。
+	// なぜなら Service が pgxpool/sqlc に直結していて、
+	// Repository インターフェースがないからモックを差し込めない。
 
 	tests := []struct {
 		name        string
@@ -34,11 +37,17 @@ func TestTemplateService_CreateTemplate_Validation(t *testing.T) {
 		fields      []sqldb.Field
 		expectedErr error
 	}{
+		// これだけがテストできる（UUIDパースは DB 不要）
 		{
 			name:        "invalid owner id",
 			ownerID:     "not-a-uuid",
 			expectedErr: ErrInvalidAccountID,
 		},
+
+		// ↓ 以下、書きたいけど書けないテストたち ↓
+
+		// order=0 のとき自動採番されることを確認したい
+		// → でも CreateField が DB を叩くので動かない
 		// {
 		// 	name:    "success with auto order",
 		// 	ownerID: "11111111-1111-1111-1111-111111111111",
@@ -46,19 +55,25 @@ func TestTemplateService_CreateTemplate_Validation(t *testing.T) {
 		// 		{Label: "Title", Order: 0, IsRequired: true},
 		// 		{Label: "Body", Order: 0, IsRequired: false},
 		// 	},
-		// 	expectedErr: nil, // ← DB とトランザクションがないと確認できない
+		// 	expectedErr: nil,
 		// },
+
+		// CreateField が失敗したらロールバックされることを確認したい
+		// → でも「CreateField を失敗させる」手段がない
 		// {
-		// 	name:    "create field fails -> transaction rolls back",
-		// 	ownerID: "11111111-1111-1111-1111-111111111111",
-		// 	fields:  []sqldb.Field{{Label: "Title", Order: 1}},
-		// 	expectedErr: errors.New("tx rollback should run"), // ← 実際は sqlc/pgx のエラーを検証したい
+		// 	name:        "create field fails -> transaction rolls back",
+		// 	ownerID:     "11111111-1111-1111-1111-111111111111",
+		// 	fields:      []sqldb.Field{{Label: "Title", Order: 1}},
+		// 	expectedErr: errors.New("tx rollback should run"),
 		// },
+
+		// 存在しない ownerID で外部キー違反になることを確認したい
+		// → でも実際に DB がないと FK 違反は起きない
 		// {
-		// 	name:    "owner violates FK",
-		// 	ownerID: "22222222-2222-2222-2222-222222222222",
-		// 	fields:  []sqldb.Field{{Label: "Title", Order: 1}},
-		// 	expectedErr: errors.New("foreign key violation"), // ← 実際は DB が返す固有エラーを想定
+		// 	name:        "owner violates FK",
+		// 	ownerID:     "22222222-2222-2222-2222-222222222222",
+		// 	fields:      []sqldb.Field{{Label: "Title", Order: 1}},
+		// 	expectedErr: errors.New("foreign key violation"),
 		// },
 	}
 
@@ -87,13 +102,14 @@ func TestTemplateService_CreateTemplate_Validation(t *testing.T) {
 func TestTemplateService_UpdateTemplate_Validation(t *testing.T) {
 	t.Parallel()
 
-	// TemplateService.UpdateTemplate が担うべき責務:
-	// 1. templateID の形式チェック。
-	// 2. Name の更新。
-	// 3. fields が nil/空/複数の場合のバリデーションと `syncTemplateFields` の Insert/Update/Delete。
-	// 4. テンプレートの使用状況に応じた ErrTemplateInUse の返却。
-	// 5. すべてトランザクション内で完結させる。
-	// 現行コードでは 2-5 が pgx/sqlc に依存しており、ユニットテストでは templateID チェックしか走らせられない。
+	// 本当はこういうことをテストしたい:
+	//   1. templateID が不正な形式ならエラー
+	//   2. 正常に更新できること
+	//   3. 使用中のテンプレートは更新できない（ErrTemplateInUse）
+	//   4. fields が空なら事前にエラー
+	//
+	// でも今の設計だと 1 しかテストできない。
+	// 2-4 は全部 DB を叩く処理の後にあるので、モックがないと到達できない。
 
 	tests := []struct {
 		name        string
@@ -101,12 +117,18 @@ func TestTemplateService_UpdateTemplate_Validation(t *testing.T) {
 		fields      []openapi.ModelsUpdateFieldRequest
 		expectedErr error
 	}{
+		// これだけがテストできる（UUIDパースは DB 不要）
 		{
 			name:        "invalid template id",
 			templateID:  "bad-id",
 			fields:      nil,
 			expectedErr: ErrInvalidTemplateID,
 		},
+
+		// ↓ 以下、書きたいけど書けないテストたち ↓
+
+		// 正常に更新できることを確認したい
+		// → でも UpdateTemplate が DB を叩くので動かない
 		// {
 		// 	name:       "success update with fields",
 		// 	templateID: "11111111-1111-1111-1111-111111111111",
@@ -115,18 +137,24 @@ func TestTemplateService_UpdateTemplate_Validation(t *testing.T) {
 		// 	},
 		// 	expectedErr: nil,
 		// },
+
+		// 使用中のテンプレートが更新拒否されることを確認したい
+		// → でも CheckTemplateInUse が DB を叩くので動かない
 		// {
-		// 	name: "template in use",
+		// 	name:       "template in use",
 		// 	templateID: "11111111-1111-1111-1111-111111111111",
 		// 	fields: []openapi.ModelsUpdateFieldRequest{
 		// 		{Id: nil, Label: "Title", Order: 1, IsRequired: true},
 		// 	},
 		// 	expectedErr: ErrTemplateInUse,
 		// },
+
+		// fields が空のときにエラーになることを確認したい
+		// → これは DB 前のバリデーションだけど、その前に UpdateTemplate が DB を叩く
 		// {
-		// 	name:       "empty fields should fail before sync",
-		// 	templateID: "11111111-1111-1111-1111-111111111111",
-		// 	fields:     []openapi.ModelsUpdateFieldRequest{},
+		// 	name:        "empty fields should fail before sync",
+		// 	templateID:  "11111111-1111-1111-1111-111111111111",
+		// 	fields:      []openapi.ModelsUpdateFieldRequest{},
 		// 	expectedErr: errors.New("at least one field is required"),
 		// },
 	}
@@ -156,33 +184,47 @@ func TestTemplateService_UpdateTemplate_Validation(t *testing.T) {
 func TestTemplateService_DeleteTemplate_Validation(t *testing.T) {
 	t.Parallel()
 
-	// TemplateService.DeleteTemplate が担うべき責務:
-	// 1. templateID の形式チェック。
-	// 2. テンプレートが存在するか確認し、なければ ErrTemplateNotFound。
-	// 3. テンプレートを参照しているノートがあれば ErrTemplateInUse。
-	// 4. トランザクション中に DeleteTemplate, CheckTemplateInUse の失敗を正しく扱う。
-	// 2-4 は DB/トランザクション依存のため、現状の構造ではユニットテストから触れない。
+	// 本当はこういうことをテストしたい:
+	//   1. templateID が不正な形式ならエラー
+	//   2. 正常に削除できること
+	//   3. 使用中のテンプレートは削除できない（ErrTemplateInUse）
+	//   4. 存在しないテンプレートなら ErrTemplateNotFound
+	//
+	// でも今の設計だと 1 しかテストできない。
+	// 2-4 は全部 CheckTemplateInUse や DeleteTemplate が DB を叩くので到達できない。
 
 	tests := []struct {
 		name        string
 		templateID  string
 		expectedErr error
 	}{
+		// これだけがテストできる（UUIDパースは DB 不要）
 		{
 			name:        "invalid template id",
 			templateID:  "bad-id",
 			expectedErr: ErrInvalidTemplateID,
 		},
+
+		// ↓ 以下、書きたいけど書けないテストたち ↓
+
+		// 正常に削除できることを確認したい
+		// → でも DeleteTemplate が DB を叩くので動かない
 		// {
 		// 	name:        "success deletion",
 		// 	templateID:  "11111111-1111-1111-1111-111111111111",
 		// 	expectedErr: nil,
 		// },
+
+		// 使用中のテンプレートが削除拒否されることを確認したい
+		// → でも CheckTemplateInUse が DB を叩くので動かない
 		// {
 		// 	name:        "template in use blocks deletion",
 		// 	templateID:  "11111111-1111-1111-1111-111111111111",
 		// 	expectedErr: ErrTemplateInUse,
 		// },
+
+		// 存在しないテンプレートで NotFound になることを確認したい
+		// → でも実際に DB がないと「存在しない」を再現できない
 		// {
 		// 	name:        "template not found",
 		// 	templateID:  "22222222-2222-2222-2222-222222222222",
